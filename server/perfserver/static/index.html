@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PerfScope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root{
+  --paper:#F3F5F6; --surface:#FFFFFF; --ink:#18222D; --muted:#5E6C79; --line:#D9DFE4;
+  --signal:#1E5BD8; --good:#17805A; --bad:#C2352B; --warn:#B7791F;
+  --font:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.55 var(--font);color:var(--ink);background:var(--paper);font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--signal);text-decoration:none} a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+
+header{background:var(--ink);color:#fff;display:flex;align-items:center;gap:28px;padding:0 28px;height:52px}
+header .logo{font-weight:700;font-size:16px}
+header nav a{color:#A9B6C2;padding:15px 0;border-bottom:2px solid transparent;margin-right:20px}
+header nav a.on{color:#fff;border-bottom-color:#fff;text-decoration:none}
+header .me{margin-left:auto;font-size:13px;color:#A9B6C2}
+main{max-width:1320px;margin:0 auto;padding:24px 28px 60px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:16px;margin:28px 0 10px}
+.muted{color:var(--muted)} .small{font-size:12px}
+
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:14px}
+.filters label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:4px}
+input[type=text],input[type=number],select,textarea{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;min-width:140px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 14px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+a.btn{display:inline-block;text-decoration:none;color:inherit}
+a.btn.primary{color:#fff}
+.btn.primary{background:var(--signal);border-color:var(--signal);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.danger{color:var(--bad)}
+
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top}
+th{font-weight:500;color:var(--muted);background:#FAFBFC;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+tbody tr:hover{background:#FAFBFC}
+.wrap{overflow-x:auto}
+
+.tag{display:inline-block;font-size:12px;padding:0 6px;border-radius:4px;background:var(--paper);margin:0 4px 2px 0}
+.tag.alert{background:#FBE9E7;color:var(--bad)} .tag.marker{background:#E8EFFC;color:var(--signal)} .tag.crash{background:#FFF4E0;color:var(--warn)}
+.bad{color:var(--bad);font-weight:500} .good{color:var(--good);font-weight:500}
+
+.selbar{position:sticky;bottom:0;background:var(--ink);color:#fff;border-radius:8px;padding:10px 16px;display:flex;gap:14px;align-items:center;margin-top:14px}
+.selbar .btn{background:#fff;color:var(--ink);border-color:#fff}
+
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-top:16px}
+.facts div{padding:10px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.facts dt{font-size:12px;color:var(--muted)} .facts dd{margin:0;font-weight:500;word-break:break-all}
+
+/* Screenshot strip above the charts */
+.shots{display:flex;gap:16px;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:16px}
+.shots .shotimg{flex:none;height:300px;aspect-ratio:9/19.5;background:var(--paper);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.shots img{max-width:100%;max-height:100%;display:block}
+.shots .shotinfo{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;justify-content:center}
+.shots .shotjump{display:flex;gap:8px;align-items:center}
+.shots input.shottime{width:7.5em;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:text}
+.shots input.shottime:hover{border-color:#A9B6C2}
+.shots input.shottime:focus{border-color:#1E5BD8;background:#fff;outline:none}
+.shots input.shottime.bad{border-color:#C2352B}
+.shots .shotinfo small{color:var(--muted);font-size:12px}
+.shots input.shotrange{width:100%}
+@media (max-width:600px){.shots{flex-direction:column}.shots .shotimg{height:240px;align-self:center}}
+/* Tooltip bubble (shared by every hint on the page) */
+.tip{position:fixed;z-index:1000;max-width:280px;padding:7px 10px;border-radius:6px;background:#18222D;color:#fff;
+  font-size:12px;line-height:1.55;font-weight:400;white-space:pre-line;word-break:break-word;pointer-events:none;
+  box-shadow:0 6px 18px rgba(24,34,45,.22);opacity:0;visibility:hidden;transition:opacity .12s ease}
+.tip.show{opacity:1;visibility:visible}
+.tip::after{content:"";position:absolute;left:var(--ax,50%);top:100%;margin-left:-5px;border:5px solid transparent;border-top-color:#18222D}
+.tip.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:#18222D}
+@media (prefers-reduced-motion:reduce){.tip{transition:none}}
+.info{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;margin-left:3px;border-radius:50%;
+  border:1px solid #C3CDD6;color:#8A97A3;font-size:8.5px;font-weight:700;line-height:1;cursor:help;vertical-align:0;flex:none;box-sizing:border-box}
+.info:hover,.info:focus-visible{border-color:#1E5BD8;color:#1E5BD8;outline:none}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* Crash log dialog */
+dialog.logdlg{border:1px solid var(--line);border-radius:10px;padding:0;width:min(900px,94vw);max-height:86vh;display:none;flex-direction:column}
+dialog.logdlg[open]{display:flex}
+dialog.logdlg::backdrop{background:rgba(24,34,45,.35)}
+.logdlg .logh{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.logdlg .logh h3{flex:1;min-width:0;margin:0;font-size:14px;overflow-wrap:anywhere}
+.logdlg pre{margin:0;padding:14px 16px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;background:#FAFBFC;flex:1}
+.lnk{border:0;background:none;padding:0 2px;color:#1E5BD8;font-size:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.lnk:focus-visible{outline:2px solid #1E5BD8;outline-offset:1px;border-radius:2px}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin:18px 0}
+.steps section{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.steps h2{margin-top:0}
+.steps p{margin:6px 0;font-size:13px}
+.steps code,#view p code{background:var(--paper);padding:1px 5px;border-radius:4px;font-size:12px}
+.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.chart h3{font-size:13px;margin:0;font-weight:500}
+.chart .c{height:200px}
+
+.warn{background:#FFF4E0;border:1px solid #F1D7A6;color:#7A4F0E;border-radius:8px;padding:10px 14px;margin:14px 0}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:48px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font-size:16px;margin-bottom:6px}
+.err{color:var(--bad)}
+.ref{font-size:11px;background:var(--ink);color:#fff;border-radius:4px;padding:0 5px;margin-left:4px}
+.edit{display:flex;gap:8px;align-items:center;margin-top:8px}
+@media (max-width:720px){main{padding:16px}.charts{grid-template-columns:1fr}header{gap:14px;padding:0 16px}}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">PerfScope</span>
+  <nav><a href="#/" data-nav="list">测试记录</a><a href="#/trend" data-nav="trend">趋势</a><a href="#/get" data-nav="get">下载客户端</a></nav>
+  <span class="me" id="me"></span>
+</header>
+<main id="view"></main>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (path, opt = {}) => {
+  const r = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opt});
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || `请求失败 ${r.status}`);
+  return body;
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+/* ---------- tooltips: one bubble for the whole page ----------
+   data-tip="..."   explains an element (info icons, buttons, metric names)
+   .trunc / .gs / .al / .combo input / .k   show their full text when cut off by an ellipsis
+   Shown on hover and on keyboard focus of info icons; Esc hides it. */
+const TIP_TRUNC = ".trunc, .gs, .al, .combo input, .ro .k";
+const tipEl = Object.assign(document.createElement("div"), {className: "tip", id: "tip", role: "tooltip"});
+document.body.appendChild(tipEl);
+let tipFor = null, tipTimer = null;
+function tipText(el) {
+  const parts = [];
+  if (el.matches(TIP_TRUNC)) {
+    const full = (el.matches("input") ? el.value : el.textContent).trim();
+    if (full && el.scrollWidth > el.clientWidth + 1) parts.push(full);
+  }
+  if (el.dataset.tip) parts.push(el.dataset.tip);
+  return parts.join("\n");
+}
+function showTip(el) {
+  const text = tipText(el);
+  if (!text || el.getAttribute("aria-expanded") === "true") return hideTip();   // an open dropdown needs no bubble
+  tipFor = el; tipEl.textContent = text; tipEl.classList.remove("below");
+  tipEl.style.left = "0px"; tipEl.style.top = "0px"; tipEl.classList.add("show");
+  const r = el.getBoundingClientRect(), w = tipEl.offsetWidth, h = tipEl.offsetHeight, gap = 8;
+  const below = r.top < h + gap + 4;
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  tipEl.style.left = left + "px";
+  tipEl.style.top = (below ? r.bottom + gap : r.top - h - gap) + "px";
+  tipEl.style.setProperty("--ax", Math.min(Math.max(12, r.left + r.width / 2 - left), w - 12) + "px");
+  tipEl.classList.toggle("below", below);
+  el.setAttribute("aria-describedby", "tip");
+}
+function hideTip() {
+  clearTimeout(tipTimer);
+  tipEl.classList.remove("show");
+  tipFor?.removeAttribute("aria-describedby"); tipFor = null;
+}
+const tipTarget = n => n?.closest?.(`[data-tip], ${TIP_TRUNC}`);
+document.addEventListener("mouseover", e => {
+  const el = tipTarget(e.target);
+  if (el === tipFor) return;
+  clearTimeout(tipTimer);
+  if (!el) return hideTip();
+  tipTimer = setTimeout(() => showTip(el), el.classList.contains("info") ? 80 : 350);
+});
+document.addEventListener("mouseout", e => { if (tipFor && !tipFor.contains(e.relatedTarget)) hideTip(); else clearTimeout(tipTimer); });
+document.addEventListener("focusin", e => { if (e.target.classList?.contains("info")) showTip(e.target); });
+document.addEventListener("focusout", hideTip);
+document.addEventListener("keydown", e => { if (e.key === "Escape") hideTip(); });
+document.addEventListener("scroll", hideTip, true);
+window.addEventListener("resize", hideTip);
+// info icons sit inside labels and <summary>: hovering explains, clicking must not toggle the group or focus the field
+document.addEventListener("click", e => { if (e.target.closest?.(".info")) { e.preventDefault(); e.stopPropagation(); } }, true);
+const info = text => `<span class="info" tabindex="0" role="img" aria-label="说明：${esc(text)}" data-tip="${esc(text)}">?</span>`;
+const osName = p => ({android: "Android", ios: "iOS"}[p] || esc(p || "Android"));
+const fmtDate = ts => ts ? new Date(ts).toLocaleString("zh-CN", {hour12: false}) : "-";
+const fmtTime = ts => new Date(ts).toLocaleTimeString("zh-CN", {hour12: false});
+const fmtDur = s => { if (s == null) return "-"; s = Math.round(s); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return (h ? h + ":" : "") + String(m).padStart(2,"0") + ":" + String(x).padStart(2,"0"); };
+const num = v => v == null ? "-" : (Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 100) / 100);
+const EVT = {marker: ["标记","marker"], alert: ["告警","alert"], process_restart: ["重启","crash"],
+             process_dead: ["进程退出","crash"], process_start: ["进程启动","marker"], error: ["错误","alert"],
+             crash: ["闪退","crash"], jetsam: ["内存超限","crash"], fault: ["异常报告","alert"], anr: ["ANR","crash"],
+             launch: ["冷启动","marker"]};
+/* ---------- crash log viewer: events that carry a log open it in a dialog ---------- */
+const LOG_KINDS = new Set(["crash", "jetsam", "fault"]);
+const isRedEvent = t => t === "alert" || t === "anr" || LOG_KINDS.has(t);
+async function copyLog(text) {
+  try { await navigator.clipboard.writeText(text); return; } catch {}
+  const t = Object.assign(document.createElement("textarea"), {value: text});
+  t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select();
+  document.execCommand("copy"); t.remove();
+}
+function showLog(att) {
+  let d = document.getElementById("logDlg");
+  if (!d) {
+    d = Object.assign(document.createElement("dialog"), {id: "logDlg", className: "logdlg"});
+    d.setAttribute("aria-labelledby", "logDlgTitle");
+    d.innerHTML = `<div class="logh"><h3 id="logDlgTitle"></h3>
+      <button class="btn" data-copy>复制日志</button><button class="btn ghost" data-close>关闭</button></div><pre tabindex="0"></pre>`;
+    document.body.appendChild(d);
+    d.querySelector("[data-close]").onclick = () => d.close();
+    d.querySelector("[data-copy]").onclick = async e => {
+      await copyLog(d.querySelector("pre").textContent);
+      e.target.textContent = "已复制"; setTimeout(() => e.target.textContent = "复制日志", 1500);
+    };
+    d.addEventListener("click", e => { if (e.target === d) d.close(); });   // click on the backdrop
+  }
+  d.querySelector("h3").textContent = att.title;
+  d.querySelector("pre").textContent = att.text;
+  d.showModal();
+  d.querySelector("pre").scrollTop = 0;
+}
+// the log of an event: attachments are stored with the same timestamp as their event
+const logFor = (atts, ts) => (atts || []).find(a => a.ts === ts);
+const logButton = (atts, ts, t) => LOG_KINDS.has(t) && logFor(atts, ts)
+  ? ` <button type="button" class="lnk" data-logts="${ts}">查看日志</button>` : "";
+
+const PALETTE = ["#1E5BD8","#C2352B","#17805A","#B7791F","#6B4FBB","#0E7C86"];
+const STAT_NAMES = {avg: "平均", p50: "P50", p90: "P90", p99: "P99", max: "最大", min: "最小", slope_per_hour: "每小时变化"};
+let charts = [];
+const disposeCharts = () => { charts.forEach(c => c.dispose()); charts = []; };
+window.addEventListener("resize", () => charts.forEach(c => c.resize()));
+
+function lineChart(el, meta, series, events = [], xType = "time") {
+  const c = echarts.init(el); charts.push(c);
+  const marks = events.filter(e => e[1] !== "error").map(([x, t, label]) => ({xAxis: x, name: label, label: {show: false},
+    lineStyle: {color: isRedEvent(t) ? "#C2352B" : t.startsWith("process") ? "#B7791F" : "#1E5BD8", type: "dashed", width: 1}}));
+  c.setOption({
+    color: PALETTE, animation: false,
+    legend: series.length > 1 ? {top: 0, right: 0, textStyle: {fontSize: 11}} : undefined,
+    grid: {left: 46, right: 12, top: series.length > 1 ? 26 : 14, bottom: 26},
+    tooltip: {trigger: "axis", valueFormatter: v => v == null ? "-" : `${num(v)} ${meta.unit || ""}`},
+    xAxis: {type: xType, minInterval: xType === "time" ? 1000 : undefined, splitNumber: 5,
+            axisLabel: {color: "#5E6C79", fontSize: 11, hideOverlap: true, formatter: xType === "value" ? "{value} 分" : undefined},
+            axisLine: {lineStyle: {color: "#D9DFE4"}}},
+    yAxis: {type: "value", scale: true, min: meta.min, max: meta.max, axisLabel: {color: "#5E6C79", fontSize: 11}, splitLine: {lineStyle: {color: "#EEF1F3"}}},
+    series: series.map((s, i) => ({type: "line", name: s.name, data: s.data, showSymbol: s.data.length < 60, symbolSize: 4,
+      sampling: "lttb", lineStyle: {width: 1.6},
+      markLine: i === 0 && marks.length ? {symbol: "none", silent: false, data: marks, tooltip: {formatter: p => esc(p.name)}} : undefined})),
+  });
+  return c;
+}
+class ShotViewer {
+  // follow: show the newest frame unless the user is hovering a chart or picked a time (live view)
+  constructor(el, urlOf, follow) {
+    Object.assign(this, {el, urlOf, follow, ts: [], cur: null, hovering: false, pinned: null});
+    el.hidden = true;
+    el.innerHTML = `<div class="shots">
+      <div class="shotimg"><img alt="手机屏幕截图"></div>
+      <div class="shotinfo">
+        <div class="shotjump">
+          <input type="text" class="shottime" inputmode="numeric" spellcheck="false" aria-label="跳转到时间，格式 时:分:秒"
+            data-tip="输入时间后按回车或点击空白处，跳到最接近的截图，如 19:49:52、19:49 或 194952；按 Esc 取消">
+          ${follow ? `<button class="btn ghost shotlatest" hidden>回到最新</button>` : ""}
+        </div>
+        <small class="shotpos"></small>
+        <input type="range" class="shotrange" min="0" max="0" value="0" aria-label="拖动查看各时刻的截图">
+        <small>鼠标移到下方任意曲线上，这里会显示那一刻的手机画面；也可以拖动滑块，或在上方输入时间，按回车或点击空白处跳转。</small>
+      </div></div>`;
+    this.img = el.querySelector("img"); this.range = el.querySelector(".shotrange"); this.time = el.querySelector(".shottime");
+    this.range.oninput = () => this.pin(this.ts[+this.range.value]);
+    this.time.onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); this.jump(); }
+      else if (e.key === "Escape") { this.time.value = fmtTime(this.cur); this.time.blur(); }   // Esc cancels
+    };
+    this.time.onfocus = () => this.time.select();
+    // clicking elsewhere confirms like Enter; an unreadable time falls back to the frame shown
+    this.time.onblur = () => {
+      const text = this.time.value.trim();
+      if (text && text !== fmtTime(this.cur)) { const t = this.parseTime(text); if (t != null) { this.pin(t); return; } }
+      this.label();
+    };
+    el.querySelector(".shotlatest")?.addEventListener("click", () => { this.pinned = null; this.leave(); });
+  }
+  add(list) {
+    if (!list.length) return;
+    this.ts.push(...list); this.el.hidden = false; this.range.max = this.ts.length - 1;
+    if (this.cur == null || (this.follow && !this.hovering && this.pinned == null)) this.show(this.ts[this.ts.length - 1]);
+    else this.label();
+  }
+  nearest(t) {
+    let lo = 0, hi = this.ts.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (this.ts[mid] < t) lo = mid + 1; else hi = mid; }
+    return lo > 0 && t - this.ts[lo - 1] < this.ts[lo] - t ? lo - 1 : lo;
+  }
+  show(t) {
+    if (!this.ts.length) return;
+    const i = this.nearest(t), ts = this.ts[i];
+    if (ts !== this.cur) { this.cur = ts; this.img.src = this.urlOf(ts); }
+    this.range.value = i; this.label();
+  }
+  label() {
+    const i = this.ts.indexOf(this.cur);
+    if (document.activeElement !== this.time) { this.time.value = fmtTime(this.cur); this.time.classList.remove("bad"); }
+    this.el.querySelector(".shotpos").textContent = `第 ${i + 1} / ${this.ts.length} 张`;
+    const latest = this.el.querySelector(".shotlatest");
+    if (latest) latest.hidden = this.pinned == null;
+  }
+  // "19:49:52", "19:49", "194952", "1949" -> that moment within this run (a run may cross midnight)
+  parseTime(text) {
+    const s = text.trim().replace(/：/g, ":");
+    const m = s.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/) || s.match(/^(\d{2})(\d{2})(\d{2})?$/);
+    if (!m) return null;
+    const [h, mi, se] = [+m[1], +m[2], +(m[3] || 0)];
+    if (h > 23 || mi > 59 || se > 59) return null;
+    const first = this.ts[0], last = this.ts[this.ts.length - 1];
+    const dist = t => t < first ? first - t : t > last ? t - last : 0;
+    return [first, last].map(ref => { const d = new Date(ref); d.setHours(h, mi, se, 0); return d.getTime(); })
+      .sort((a, b) => dist(a) - dist(b))[0];
+  }
+  jump() {
+    const t = this.parseTime(this.time.value);
+    if (t == null) { this.time.classList.add("bad"); return; }
+    this.pin(t); this.time.blur();
+  }
+  pin(t) { this.pinned = t; this.show(t); }
+  hover(t) { this.hovering = true; this.show(t); }
+  leave() {
+    this.hovering = false;
+    if (this.pinned != null) this.show(this.pinned);
+    else if (this.follow) this.show(this.ts[this.ts.length - 1]);
+    this.label();
+  }
+}
+// hovering any of these charts shows the screenshot nearest to that moment
+function linkShots(list, viewer) {
+  list.forEach(c => {
+    c.on("updateAxisPointer", e => { const v = e.axesInfo?.[0]?.value; if (v != null) viewer.hover(v); });
+    c.getZr().on("globalout", () => viewer.leave());
+  });
+}
+
+function chartBox(container, meta, sub = "") {
+  const box = document.createElement("div"); box.className = "chart";
+  box.innerHTML = `<h3>${esc(meta.label)}${meta.unit ? ` <span class="muted">(${esc(meta.unit)})</span>` : ""}${sub}</h3><div class="c"></div>`;
+  container.appendChild(box); return box.querySelector(".c");
+}
+const groupPoints = points => { const by = {}; for (const [ts, m, v] of points) (by[m] ||= []).push([ts, v]); return by; };
+
+
+/* ---------------- list ---------------- */
+const listState = {selected: [], filters: {}};
+async function viewList() {
+  const projects = await api("/api/projects");
+  const f = listState.filters;
+  $("#view").innerHTML = `
+    <h1>测试记录</h1><p class="muted" style="margin:0 0 18px">勾选两条或以上记录进行对比，第一条勾选的作为参照。</p>
+    <div class="filters">
+      <label>项目<select id="fProject"><option value="">全部项目</option>${projects.map(p => `<option ${p.name === f.project ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+      <label>应用版本<input type="text" id="fVersion" value="${esc(f.app_version || "")}" placeholder="如 2.3.0"></label>
+      <label>标签<input type="text" id="fTag" value="${esc(f.tag || "")}"></label>
+      <label>名称包含<input type="text" id="fQ" value="${esc(f.q || "")}"></label>
+      <button class="btn primary" id="fGo">筛选</button>
+    </div>
+    <div id="listBody" class="wrap"></div>
+    <div id="selbar"></div>`;
+  $("#fGo").onclick = () => { listState.filters = {project: $("#fProject").value, app_version: $("#fVersion").value.trim(),
+    tag: $("#fTag").value.trim(), q: $("#fQ").value.trim()}; loadList(); };
+  ["#fVersion", "#fTag", "#fQ"].forEach(s => $(s).onkeydown = e => { if (e.key === "Enter") $("#fGo").click(); });
+  $("#fProject").onchange = () => $("#fGo").click();
+  loadList();
+}
+async function loadList() {
+  const qs = new URLSearchParams(Object.entries(listState.filters).filter(([, v]) => v));
+  try {
+    const d = await api("/api/sessions?" + qs);
+    if (!d.items.length) { $("#listBody").innerHTML = `<div class="empty"><b>没有符合条件的测试记录</b>在客户端完成测试后点「上传」，记录会出现在这里。</div>`; renderSelbar(); return; }
+    $("#listBody").innerHTML = `<table><thead><tr><th></th><th>名称</th><th>项目</th><th>应用 / 版本</th><th>设备</th><th>开始时间</th><th class="num">时长</th><th class="num">告警</th><th class="num">进程异常</th><th>上传者</th></tr></thead><tbody>${
+      d.items.map(s => `<tr>
+        <td><input type="checkbox" data-id="${s.id}" ${listState.selected.includes(s.id) ? "checked" : ""} aria-label="选择 ${esc(s.name)}"></td>
+        <td><a href="#/s/${s.id}">${esc(s.name)}</a>${listState.selected[0] === s.id ? '<span class="ref">参照</span>' : ""}<div>${(s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div></td>
+        <td>${esc(s.project)}</td>
+        <td>${esc(s.app_package)}<div class="small muted">${esc(s.app_version)}</div></td>
+        <td>${esc(s.device_model)}<div class="small muted">${osName(s.platform)} ${esc(s.os_version)}</div></td>
+        <td>${fmtDate(s.started_at)}</td>
+        <td class="num">${fmtDur(s.duration_s)}</td>
+        <td class="num ${s.alert_count ? "bad" : ""}">${s.alert_count}</td>
+        <td class="num ${s.crash_count ? "bad" : ""}">${s.crash_count}</td>
+        <td>${esc(s.created_by)}</td></tr>`).join("")}</tbody></table>
+      <p class="small muted">共 ${d.total} 条</p>`;
+    $("#listBody").querySelectorAll("input[type=checkbox]").forEach(cb => cb.onchange = () => {
+      const id = cb.dataset.id;
+      listState.selected = cb.checked ? [...listState.selected, id] : listState.selected.filter(x => x !== id);
+      loadList();
+    });
+    renderSelbar();
+  } catch (e) { $("#listBody").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+function renderSelbar() {
+  const n = listState.selected.length;
+  $("#selbar").innerHTML = n ? `<div class="selbar"><span>已选 ${n} 条</span><span style="flex:1"></span>
+    <button class="btn" id="clearSel">清空</button><button class="btn" id="goCompare" ${n < 2 ? "disabled" : ""}>对比所选</button></div>` : "";
+  if (!n) return;
+  $("#clearSel").onclick = () => { listState.selected = []; loadList(); };
+  $("#goCompare").onclick = () => location.hash = "#/compare?ids=" + listState.selected.join(",");
+}
+
+/* ---------------- detail ---------------- */
+async function viewDetail(id) {
+  const [s, data, shots, atts] = await Promise.all([api(`/api/sessions/${id}`), api(`/api/sessions/${id}/data`),
+    api(`/api/sessions/${id}/screenshots`).catch(() => []), api(`/api/sessions/${id}/attachments`).catch(() => [])]);
+  const metrics = s.metric_order;
+  const d = s.device || {};
+  $("#view").innerHTML = `
+    <p class="small"><a href="#/">← 测试记录</a></p>
+    <h1>${esc(s.name)}</h1>
+    <div>${(s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+    <dl class="facts">
+      <div><dt>项目</dt><dd>${esc(s.project)}</dd></div>
+      <div><dt>应用</dt><dd>${esc(s.app_package)} ${esc(s.app_version)}</dd></div>
+      <div><dt>设备</dt><dd>${esc(s.device_model)}</dd></div>
+      <div><dt>系统</dt><dd>${osName(s.platform)} ${esc(s.os_version)}${d.sdk ? ` (SDK ${esc(d.sdk)})` : d.build ? ` (${esc(d.build)})` : ""}</dd></div>
+      <div><dt>开始时间</dt><dd>${fmtDate(s.started_at)}</dd></div>
+      <div><dt>时长</dt><dd>${fmtDur(s.duration_s)}</dd></div>
+      <div><dt>采样间隔</dt><dd>${esc(s.config?.interval ?? "-")} 秒</dd></div>
+      <div><dt>上传者</dt><dd>${esc(s.created_by)}</dd></div>
+    </dl>
+    <div class="edit">
+      <input type="text" id="eTags" value="${esc((s.tags || []).join(", "))}" placeholder="标签，逗号分隔" style="flex:1">
+      <input type="text" id="eNotes" value="${esc(s.notes || "")}" placeholder="备注" style="flex:2">
+      <button class="btn" id="eSave">保存标签和备注</button>
+      <button class="btn danger" id="eDel">删除记录</button>
+    </div>
+    <p class="small" id="eMsg"></p>
+    <h2>指标统计</h2>
+    <div class="wrap"><table><thead><tr><th>指标</th><th class="num">样本数</th><th class="num">平均</th><th class="num">P50</th><th class="num">P90</th><th class="num">P99</th><th class="num">最小</th><th class="num">最大</th><th class="num">每小时变化</th></tr></thead><tbody>${
+      metrics.map(m => { const st = s.stats[m], mm = s.metric_meta[m];
+        return `<tr><td>${esc(mm.label)} <span class="muted small">${esc(mm.unit)}</span></td><td class="num">${st.count}</td>${
+          ["avg","p50","p90","p99","min","max"].map(k => `<td class="num">${num(st[k])}</td>`).join("")}<td class="num">${
+          st.slope_per_hour == null ? '<span class="muted" data-tip="测试时长不足 5 分钟，算不出每小时变化">-</span>' : (st.slope_per_hour > 0 ? "+" : "") + num(st.slope_per_hour)}</td></tr>`; }).join("")}</tbody></table></div>
+    <h2>曲线</h2><div id="shotBox"></div><div class="charts" id="charts"></div>
+    <h2>事件</h2>${s.events.length ? `<div class="wrap" id="detEvents"><table><tbody>${s.events.map(([ts, t, label]) => { const [n, c] = EVT[t] || [t, ""];
+      return `<tr><td style="width:100px" class="muted">${fmtTime(ts)}</td><td style="width:90px"><span class="tag ${c}">${esc(n)}</span></td><td>${esc(label)}${logButton(atts, ts, t)}</td></tr>`; }).join("")}</tbody></table></div>`
+      : `<p class="muted">本次测试没有事件。</p>`}`;
+  $("#detEvents")?.addEventListener("click", e => {
+    const b = e.target.closest("[data-logts]"); if (b) showLog(logFor(atts, +b.dataset.logts));
+  });
+  const by = groupPoints(data.points);
+  const detailCharts = metrics.map(m => lineChart(chartBox($("#charts"), s.metric_meta[m]), s.metric_meta[m], [{name: s.metric_meta[m].label, data: by[m] || []}], s.events));
+  if (shots.length) {
+    const viewer = new ShotViewer($("#shotBox"), ts => `/api/sessions/${id}/screenshots/${ts}`, false);
+    viewer.add(shots); linkShots(detailCharts, viewer);
+  }
+  $("#eSave").onclick = async () => {
+    try { await api(`/api/sessions/${id}`, {method: "PATCH", body: JSON.stringify({
+      tags: $("#eTags").value.split(/[,，]/).map(t => t.trim()).filter(Boolean), notes: $("#eNotes").value})});
+      $("#eMsg").textContent = "已保存"; $("#eMsg").className = "small good"; }
+    catch (e) { $("#eMsg").textContent = e.message; $("#eMsg").className = "small err"; }
+  };
+  $("#eDel").onclick = async () => {
+    if (!confirm("从服务器删除这条测试记录？此操作不能撤销。")) return;
+    try { await api(`/api/sessions/${id}`, {method: "DELETE"}); location.hash = "#/"; }
+    catch (e) { $("#eMsg").textContent = e.message; $("#eMsg").className = "small err"; }
+  };
+}
+
+/* ---------------- get the client ---------------- */
+function viewGet() {
+  const here = location.origin;
+  $("#view").innerHTML = `
+    <h1>下载客户端，用自己的手机做性能测试</h1>
+    <p class="muted">客户端装在你自己的电脑上，用数据线连手机测试；测完一键上传，就会出现在这个网站的「测试记录」里，大家可以一起查看和对比。</p>
+    <p><a class="btn primary" href="/download/PerfScope.zip" download>下载 PerfScope 客户端（Mac / Windows 通用）</a>
+       <span class="small muted" style="margin-left:8px">已自动配置好服务器地址 ${esc(here)}</span></p>
+    <div class="steps">
+      <section><h2>1. 安装 Python（只需一次）</h2>
+        <p>需要 Python 3.10 或更新版本。</p>
+        <p><b>Mac</b>：在「终端」运行 <code>brew install python@3.12</code>（没有 Homebrew 的话从 <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> 下载安装）</p>
+        <p><b>Windows</b>：从 <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> 下载安装，安装时勾选「Add python.exe to PATH」</p></section>
+      <section><h2>2. 准备手机</h2>
+        <p><b>Android</b>：电脑上安装 adb（Mac：<code>brew install android-platform-tools</code>）；手机打开「开发者选项 → USB 调试」，连上后在手机上点「允许」，USB 方式选「传输文件」。荣耀 / 华为手机还要打开「“仅充电”模式下允许 ADB 调试」。</p>
+        <p><b>iPhone</b>：不用装 Xcode。连上后解锁手机点「信任此电脑」，并打开「设置 → 隐私与安全性 → 开发者模式」。</p></section>
+      <section><h2>3. 启动</h2>
+        <p>解压下载的文件。<b>Mac</b>：在终端进入解压后的文件夹，运行 <code>./start.sh</code>；<b>Windows</b>：双击 <code>start.bat</code>。</p>
+        <p>第一次会自动安装依赖，约一两分钟，之后浏览器会打开客户端。没有手机也可以先用 <code>./start.sh --demo</code> 体验。</p></section>
+      <section><h2>4. 测试并上传</h2>
+        <p>选设备和应用 → 开始测试 → 操作手机 → 结束测试 → 在「本地记录」点「上传」。客户端左侧每一项旁边的「?」都有说明。</p></section>
+    </div>
+    <p class="small muted">解压后的文件夹里也有一份 START-HERE.txt，内容和本页相同。</p>`;
+}
+
+/* ---------------- compare ---------------- */
+const cmpState = {stat: "avg", threshold: 10};
+async function viewCompare(ids) {
+  const d = await api(`/api/compare?ids=${encodeURIComponent(ids)}`);
+  const datas = await Promise.all(d.sessions.map(s => api(`/api/sessions/${s.id}/data`)));
+  const ref = d.sessions[0];
+  const label = (s, i) => `${i === 0 ? "参照 · " : ""}${s.name}`;
+  $("#view").innerHTML = `
+    <p class="small"><a href="#/">← 测试记录</a></p>
+    <h1>对比 ${d.sessions.length} 次测试</h1>
+    <p class="muted" style="margin:0">以「${esc(ref.name)}」为参照。差异超过阈值且方向变差的标红，变好的标绿。</p>
+    ${d.warnings.length ? `<div class="warn">测试环境不一致，请确认数据是否可比：<br>${d.warnings.map(esc).join("<br>")}</div>` : ""}
+    <div class="filters" style="margin-top:14px">
+      <label>比较统计值<select id="cStat">${Object.entries(STAT_NAMES).filter(([k]) => k !== "min").map(([k, v]) => `<option value="${k}" ${k === cmpState.stat ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>差异阈值（%）<input type="number" id="cThr" value="${cmpState.threshold}" min="0" step="1" style="min-width:90px"></label>
+    </div>
+    <div class="wrap" id="cTable"></div>
+    <h2>曲线叠加 <span class="small muted" style="font-weight:400">横轴为测试开始后的分钟数</span></h2>
+    <div class="charts" id="charts"></div>`;
+  const renderTable = () => {
+    const k = cmpState.stat, thr = cmpState.threshold;
+    $("#cTable").innerHTML = `<table><thead><tr><th>指标</th>${d.sessions.map((s, i) => `<th class="num">${esc(label(s, i))}<div class="small muted" style="font-weight:400">${esc(s.app_version)} · ${fmtDate(s.started_at)}</div></th>`).join("")}</tr></thead><tbody>${
+      d.metrics.map(m => { const mm = d.metric_meta[m], base = ref.stats[m]?.[k];
+        return `<tr><td>${esc(mm.label)} <span class="muted small">${esc(mm.unit)}</span></td>${d.sessions.map((s, i) => {
+          const v = s.stats[m]?.[k];
+          if (v == null) return `<td class="num muted">-</td>`;
+          if (i === 0 || base == null || base === 0) return `<td class="num">${num(v)}</td>`;
+          const pct = (v - base) / Math.abs(base) * 100, worse = mm.better === "higher" ? pct < 0 : pct > 0;
+          const cls = Math.abs(pct) >= thr ? (worse ? "bad" : "good") : "muted";
+          return `<td class="num">${num(v)} <span class="small ${cls}">${pct > 0 ? "+" : ""}${pct.toFixed(1)}%</span></td>`; }).join("")}</tr>`; }).join("")}</tbody></table>`;
+  };
+  renderTable();
+  $("#cStat").onchange = e => { cmpState.stat = e.target.value; renderTable(); };
+  $("#cThr").oninput = e => { cmpState.threshold = parseFloat(e.target.value) || 0; renderTable(); };
+  const grouped = datas.map(x => groupPoints(x.points));
+  d.metrics.forEach(m => {
+    const series = d.sessions.map((s, i) => ({name: label(s, i),
+      data: (grouped[i][m] || []).map(([ts, v]) => [Math.round((ts - s.started_at) / 600) / 100, v])}));
+    lineChart(chartBox($("#charts"), d.metric_meta[m]), d.metric_meta[m], series, [], "value");
+  });
+}
+
+/* ---------------- trend ---------------- */
+const trendState = {project: "", metric: "mem_pss", stat: "avg", tag: ""};
+async function viewTrend() {
+  const projects = await api("/api/projects");
+  if (!trendState.project && projects.length) trendState.project = projects[0].name;
+  const t = trendState;
+  $("#view").innerHTML = `
+    <h1>趋势</h1><p class="muted" style="margin:0 0 18px">查看某项指标在多次测试中的变化。用标签筛选同一测试方案，结果才可比。</p>
+    <div class="filters">
+      <label>项目<select id="tProject">${projects.map(p => `<option ${p.name === t.project ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+      <label>指标<select id="tMetric"></select></label>
+      <label>统计值<select id="tStat">${Object.entries(STAT_NAMES).map(([k, v]) => `<option value="${k}" ${k === t.stat ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>标签<input type="text" id="tTag" value="${esc(t.tag)}" placeholder="如 回归"></label>
+      <button class="btn primary" id="tGo">查看趋势</button>
+    </div>
+    <div id="trendBody"></div>`;
+  const loadMetrics = async () => {
+    const r = await api("/api/metrics?" + new URLSearchParams({project: $("#tProject").value || ""}));
+    if (!r.metrics.includes(trendState.metric)) trendState.metric = r.metrics[0] || "";
+    $("#tMetric").innerHTML = r.metrics.map(m => `<option value="${esc(m)}" ${m === trendState.metric ? "selected" : ""}>${esc(r.metric_meta[m].label)}${r.metric_meta[m].unit ? ` (${esc(r.metric_meta[m].unit)})` : ""}</option>`).join("");
+  };
+  await loadMetrics();
+  $("#tProject").onchange = async () => { await loadMetrics(); $("#tGo").click(); };
+  $("#tGo").onclick = async () => {
+    Object.assign(trendState, {project: $("#tProject").value, metric: $("#tMetric").value, stat: $("#tStat").value, tag: $("#tTag").value.trim()});
+    disposeCharts();
+    if (trendState.project && !trendState.metric) { $("#trendBody").innerHTML = `<div class="empty"><b>这个项目还没有指标数据</b>上传测试记录后即可查看趋势。</div>`; return; }
+    if (!trendState.project) { $("#trendBody").innerHTML = `<div class="empty"><b>还没有项目</b>上传测试记录后即可查看趋势。</div>`; return; }
+    try {
+      const qs = new URLSearchParams(Object.entries(trendState).filter(([, v]) => v));
+      const r = await api("/api/trend?" + qs);
+      if (!r.points.length) { $("#trendBody").innerHTML = `<div class="empty"><b>没有数据</b>当前筛选条件下没有包含该指标的测试记录。</div>`; return; }
+      $("#trendBody").innerHTML = `<div class="chart"><h3>${esc(r.meta.label)} · ${STAT_NAMES[r.stat]}</h3><div class="c" style="height:340px"></div></div>
+        <h2>数据</h2><div class="wrap"><table><thead><tr><th>测试</th><th>版本</th><th>时间</th><th class="num">${STAT_NAMES[r.stat]}</th></tr></thead><tbody>${
+        r.points.slice().reverse().map(p => `<tr><td><a href="#/s/${p.id}">${esc(p.name)}</a></td><td>${esc(p.app_version)}</td><td>${fmtDate(p.started_at)}</td><td class="num">${num(p.value)} ${esc(r.meta.unit)}</td></tr>`).join("")}</tbody></table></div>`;
+      const c = echarts.init($("#trendBody .c")); charts.push(c);
+      c.setOption({color: PALETTE, animation: false, grid: {left: 50, right: 16, top: 16, bottom: 50},
+        tooltip: {trigger: "axis", formatter: ps => { const p = r.points[ps[0].dataIndex];
+          return `${esc(p.name)}<br>${esc(p.app_version)} · ${fmtDate(p.started_at)}<br><b>${num(p.value)} ${esc(r.meta.unit)}</b>`; }},
+        xAxis: {type: "category", data: r.points.map(p => `${p.app_version || "?"}\n${new Date(p.started_at).toLocaleDateString("zh-CN")}`),
+          axisLabel: {color: "#5E6C79", fontSize: 11}},
+        yAxis: {type: "value", scale: true, axisLabel: {color: "#5E6C79"}, splitLine: {lineStyle: {color: "#EEF1F3"}}},
+        series: [{type: "line", data: r.points.map(p => p.value), symbolSize: 7, lineStyle: {width: 2}}]});
+    } catch (e) { $("#trendBody").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  };
+  if (t.project) $("#tGo").click();
+  else $("#trendBody").innerHTML = `<div class="empty"><b>还没有项目</b>上传测试记录后即可查看趋势。</div>`;
+}
+
+/* ---------------- router ---------------- */
+async function route() {
+  disposeCharts();
+  const h = location.hash.slice(1) || "/";
+  const navOn = h.startsWith("/trend") ? "trend" : h.startsWith("/get") ? "get" : "list";
+  document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === navOn));
+  try {
+    if (h.startsWith("/s/")) await viewDetail(decodeURIComponent(h.slice(3)));
+    else if (h.startsWith("/compare")) await viewCompare(new URLSearchParams(h.split("?")[1]).get("ids") || "");
+    else if (h.startsWith("/trend")) await viewTrend();
+    else if (h.startsWith("/get")) viewGet();
+    else await viewList();
+  } catch (e) { $("#view").innerHTML = `<div class="empty"><b>页面加载失败</b>${esc(e.message)}<p><a href="#/">返回测试记录</a></p></div>`; }
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+api("/api/me").then(m => $("#me").textContent = m.user).catch(() => {});
+route();
+</script>
+</body>
+</html>

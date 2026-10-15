@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn>=0.27
+pyyaml>=6.0
+requests>=2.31
+pillow>=10.0   # 截图压缩
+pymobiledevice3>=11.29,<12   # iOS 真机（Windows 还需要安装 Apple 设备支持 / iTunes）

@@ -1,0 +1,26 @@
+# 示例：录音中切后台，持续 2 小时
+name: 录音中切后台 2h
+project: 录音App-Android
+tags: [录音, 后台, 回归]
+target:
+  platform: android
+  package: com.example.recorder   # 改成你们的包名
+  # serial: 不填则自动使用唯一在线设备
+metrics: [cpu, mem_pss, threads, fps, jank, net_rx, net_tx, battery_level, battery_temp, current]
+interval: 1          # 采样间隔（秒）
+duration: 2h         # 2h / 30m / 90s；不填则一直跑到手动结束
+# 数据源：不写则使用默认（读取 App 日志中的业务指标）
+sources: [android.logcat]
+# 业务日志规则：App 打印  PERF|asr_latency|320  即可被采集为 biz.asr_latency
+log_rules:
+  - pattern: 'PERF\|(?P<name>[\w.\-]+)\|(?P<value>-?\d+(?:\.\d+)?)'
+# 业务指标的中文名和单位，会随数据上传到服务器
+metric_meta:
+  biz.asr_latency: {label: 转写延迟, unit: ms}
+  biz.agent_ttft: {label: Agent 首字时间, unit: ms}
+alerts:
+  mem_pss: "> 800"
+  battery_temp: "> 42"
+  biz.agent_ttft: "> 3000"
+upload: true
+fail_on_alert: false

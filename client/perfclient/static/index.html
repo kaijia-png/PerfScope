@@ -1,0 +1,1457 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PerfScope 客户端</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root{
+  --paper:#F3F5F6; --surface:#FFFFFF; --ink:#18222D; --muted:#5E6C79; --line:#D9DFE4;
+  --signal:#1E5BD8; --good:#17805A; --bad:#C2352B; --warn:#B7791F;
+  --font:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:14px/1.55 var(--font);color:var(--ink);background:var(--paper);font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+a{color:var(--signal);text-decoration:none} a:hover{text-decoration:underline}
+
+.app{display:grid;grid-template-columns:320px 1fr;height:100%}
+aside{background:var(--surface);border-right:1px solid var(--line);overflow:auto;padding:20px}
+main{overflow:auto;padding:20px 28px 40px}
+h1{font-size:18px;margin:0 0 2px;font-weight:700}
+.sub{color:var(--muted);font-size:12px;margin:0 0 18px}
+h2{font-size:15px;margin:0 0 10px;font-weight:700}
+
+label.f,div.f{display:block;margin:0 0 12px}
+label.f>span,div.f>span{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+input[type=text],input[type=number],select,textarea{
+  width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:#fff}
+/* one chevron for every dropdown: native selects and the app picker look the same */
+select,.combo input{appearance:none;-webkit-appearance:none;padding-right:30px;
+  background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%235E6C79' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
+textarea{min-height:64px;resize:vertical;font-size:13px}
+/* Alert thresholds and business metrics: fill in numbers, no syntax to learn */
+.arows{display:grid;gap:6px}
+.arow{display:grid;grid-template-columns:1fr 50px 84px 42px;gap:6px;align-items:center;font-size:13px}
+.arow .al{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arow .au{color:var(--muted);font-size:12px}
+/* Local compare */
+.cmpview{margin-top:4px}
+.pagebar{margin:0 0 6px}
+.pagebar .btn{padding:4px 10px 4px 6px}
+#histView .dhead{margin-top:0}
+.cmpview .cmph{font-size:14px;margin:18px 0 8px}
+.cmpview .small{font-size:12px} .cmpview .muted{color:var(--muted)}
+.cmpview .bad{color:var(--bad);font-weight:500} .cmpview .good{color:var(--good);font-weight:500}
+.cmpview .num{text-align:right;font-variant-numeric:tabular-nums}
+.cmpview .wrap{overflow-x:auto}
+.cmpview .warn{background:#FFF4E0;border:1px solid #F1D7A6;color:#7A4F0E;border-radius:8px;padding:10px 14px;margin:12px 0}
+.cmpview .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px}
+.cmpview .filters label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:4px}
+.rngs{display:grid;gap:10px}
+.rng{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.rng-h{display:flex;align-items:baseline;gap:10px;min-width:0}
+.rng-h b{font-size:13px;flex:0 1 auto}
+.rng-c{height:96px}
+.rng-f{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end}
+.rng-f label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:3px}
+.rng-f input{width:84px;padding:5px 8px;font-variant-numeric:tabular-nums}
+.rng-f select{width:180px;padding:5px 30px 5px 8px}
+.rng-f select:disabled{color:var(--muted);background-color:var(--paper);cursor:not-allowed;pointer-events:none}
+.rng-f input.badin{border-color:var(--bad)}
+.rpre{display:flex;gap:4px;align-self:flex-end;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 10px;font-size:12px;color:var(--ink);cursor:pointer;line-height:1.4}
+.chip:hover{border-color:#1E5BD8;color:#1E5BD8}
+.chip.on{background:#EAF0FC;border-color:#1E5BD8;color:#1E5BD8}
+.chip:focus-visible{outline:2px solid #1E5BD8;outline-offset:1px}
+/* compare selection in local records */
+.cmpbar{display:flex;align-items:center;gap:10px;margin:0 0 10px;font-size:13px;color:var(--muted)}
+.cmpbar[hidden]{display:none}
+#historyBody td.pick,#historyBody th.pick{width:28px;padding-right:0}
+.pagetbl .num{text-align:right;font-variant-numeric:tabular-nums}
+/* pagination under local records */
+.pager{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;flex-wrap:wrap}
+.pager .grow{flex:1}
+.pager .btn{padding:4px 10px;min-width:32px}
+.pager .btn:disabled{opacity:.4;cursor:default}
+.pager .pg.on{background:#EAF0FC;border-color:#1E5BD8;color:#1E5BD8;font-weight:600}
+.pager label{display:flex;align-items:center;gap:4px;margin-left:8px}
+.pager select{width:auto;padding:3px 24px 3px 8px;background-position:right 6px center}
+/* local records: short columns never wrap */
+#historyBody th,#historyBody td:nth-child(n+4){white-space:nowrap}
+.sub2{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin-top:2px}
+.sub2 .tag{margin:0}
+.muted{color:var(--muted)}
+/* detail header of a local record */
+.dhead{display:flex;align-items:center;gap:12px;margin-top:24px}
+.dhead h2{margin:0;flex:1;min-width:0}
+.dhead .btn{display:inline-flex;align-items:center;gap:6px;flex:none}
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px 20px;margin:12px 0 16px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.facts div{min-width:0}
+.facts dt{font-size:12px;color:var(--muted)}
+.facts dd{margin:0;font-size:13px;word-break:break-all}
+.sid{display:inline-flex;align-items:center;gap:4px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);background:var(--paper);border:1px solid transparent;border-radius:4px;padding:2px 6px;cursor:pointer}
+.sid:hover{color:#1E5BD8;border-color:#C9D7F5}
+.sid:focus-visible{outline:2px solid #1E5BD8;outline-offset:1px}
+button.op{height:100%;min-height:31px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer}
+button.op:hover{border-color:#1E5BD8;color:#1E5BD8}
+button.op:focus-visible{outline:2px solid #1E5BD8;outline-offset:1px}
+.arow input{padding:6px 8px}
+.hint{font-size:12px;color:var(--muted);margin:2px 0 6px}
+/* App picker: searchable single-select dropdown */
+/* Tooltip bubble (shared by every hint on the page) */
+.tip{position:fixed;z-index:1000;max-width:280px;padding:7px 10px;border-radius:6px;background:#18222D;color:#fff;
+  font-size:12px;line-height:1.55;font-weight:400;white-space:pre-line;word-break:break-word;pointer-events:none;
+  box-shadow:0 6px 18px rgba(24,34,45,.22);opacity:0;visibility:hidden;transition:opacity .12s ease}
+.tip.show{opacity:1;visibility:visible}
+.tip::after{content:"";position:absolute;left:var(--ax,50%);top:100%;margin-left:-5px;border:5px solid transparent;border-top-color:#18222D}
+.tip.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:#18222D}
+@media (prefers-reduced-motion:reduce){.tip{transition:none}}
+.info{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;margin-left:3px;border-radius:50%;
+  border:1px solid #C3CDD6;color:#8A97A3;font-size:8.5px;font-weight:700;line-height:1;cursor:help;vertical-align:0;flex:none;box-sizing:border-box}
+.info:hover,.info:focus-visible{border-color:#1E5BD8;color:#1E5BD8;outline:none}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* Crash log dialog */
+dialog.logdlg{border:1px solid var(--line);border-radius:10px;padding:0;width:min(900px,94vw);max-height:86vh;display:none;flex-direction:column}
+dialog.logdlg[open]{display:flex}
+dialog.logdlg::backdrop{background:rgba(24,34,45,.35)}
+.logdlg .logh{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.logdlg .logh h3{flex:1;min-width:0;margin:0;font-size:14px;overflow-wrap:anywhere}
+.logdlg pre{margin:0;padding:14px 16px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;background:#FAFBFC;flex:1}
+.lnk{border:0;background:none;padding:0 2px;color:#1E5BD8;font-size:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.lnk:focus-visible{outline:2px solid #1E5BD8;outline-offset:1px;border-radius:2px}
+/* Sidebar groups */
+.grp{border-top:1px solid var(--line);padding:2px 0}
+.grp.fixed{border-top:0;padding-top:0}
+.gh,.grp>summary{display:flex;align-items:center;gap:6px;padding:10px 0;font-size:13px;font-weight:700;color:var(--ink)}
+.grp>summary{list-style:none;cursor:pointer;user-select:none;border-radius:4px}
+.grp>summary::-webkit-details-marker{display:none}
+.gh>.info{margin-left:-3px}
+.grp>summary::before{content:"";width:12px;height:12px;flex:none;transform:rotate(-90deg);transition:transform .15s ease;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%235E6C79' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center}
+.grp[open]>summary::before{transform:none}
+.grp>summary:hover{color:#1E5BD8}
+.grp>summary:focus-visible{outline:2px solid #1E5BD8;outline-offset:2px}
+.grp>summary>span:first-child{flex:none;white-space:nowrap}
+.grp .gs{margin-left:auto;padding-left:12px;font-weight:400;font-size:12px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grp[open] .gs{display:none}
+.grp>.gb{padding:2px 0 6px}
+@media (prefers-reduced-motion:reduce){.grp>summary::before{transition:none}}
+/* start button stays reachable without scrolling the whole form */
+aside{padding-bottom:0}
+.foot{position:sticky;bottom:0;margin:8px -20px 0;padding:12px 20px 16px;background:var(--surface);border-top:1px solid var(--line)}
+.foot .msg:empty{display:none}
+.combo{position:relative;min-width:0}
+/* the dropdown's own chevron flips up while the list is open */
+.combo input{background-image:none}
+.combo::after{content:"";position:absolute;right:10px;top:50%;width:12px;height:12px;margin-top:-6px;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%235E6C79' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center;
+  transition:transform .15s ease}
+.combo.open::after{transform:rotate(180deg)}
+@media (prefers-reduced-motion:reduce){.combo::after{transition:none}}
+.combo ul{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 4px);margin:0;padding:4px 0;list-style:none;
+  background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 18px rgba(24,34,45,.12);max-height:260px;overflow:auto}
+.combo li{padding:6px 10px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:8px;word-break:break-all}
+.combo li[aria-selected=true]{font-weight:600}
+.combo li[aria-selected=true]::after{content:"✓";color:var(--accent,#1E5BD8)}
+.combo li.active{background:var(--paper)}
+.combo li mark{background:none;color:var(--accent,#1E5BD8);font-weight:700}
+.combo li.none{color:var(--muted);cursor:default}
+.combo li small{color:var(--muted);font-weight:400;font-size:11px;margin-left:auto}
+.combo input[readonly]{cursor:pointer}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:13px}
+.checks label{display:flex;gap:6px;align-items:center}
+
+.btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 14px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--signal);border-color:var(--signal);color:#fff}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--signal);padding:4px 8px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.wide{width:100%;padding:10px}
+
+.tabs{display:flex;gap:4px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+.tabs button{border:0;background:none;padding:8px 14px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
+.tabs .spacer{flex:1}
+
+.runbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface);
+  border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin-bottom:16px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.dot.on{background:var(--good);box-shadow:0 0 0 4px rgba(23,128,90,.15)}
+.runbar .name{font-weight:700}
+.runbar .clock{font-size:20px;font-weight:700;letter-spacing:.02em}
+.runbar .grow{flex:1}
+.runbar input{width:180px}
+
+/* Readout rack: the instrument face of the tool */
+.rack{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  background:var(--ink);color:#fff;border-radius:8px;overflow:hidden;margin-bottom:16px}
+.ro{padding:12px 14px;border-right:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08)}
+.ro .k{font-size:12px;color:#A9B6C2}
+.ro .v{font-size:26px;font-weight:700;line-height:1.2}
+.ro .v small{font-size:12px;font-weight:400;color:#A9B6C2;margin-left:3px}
+.ro.alert .v{color:#FF8A80}
+
+/* Screenshot strip above the charts */
+.shots{display:flex;gap:16px;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:16px}
+.shots .shotimg{flex:none;height:300px;aspect-ratio:9/19.5;background:var(--paper);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.shots img{max-width:100%;max-height:100%;display:block}
+.shots .shotinfo{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;justify-content:center}
+.shots .shotjump{display:flex;gap:8px;align-items:center}
+.shots input.shottime{width:7.5em;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:text}
+.shots input.shottime:hover{border-color:#A9B6C2}
+.shots input.shottime:focus{border-color:#1E5BD8;background:#fff;outline:none}
+.shots input.shottime.bad{border-color:#C2352B}
+.shots .shotinfo small{color:var(--muted);font-size:12px}
+.shots input.shotrange{width:100%}
+@media (max-width:600px){.shots{flex-direction:column}.shots .shotimg{height:240px;align-self:center}}
+.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:12px}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.chart h3{font-size:13px;margin:0;font-weight:500}
+.chart .c{height:190px}
+
+.events{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-top:16px;max-height:260px;overflow:auto}
+.ev{display:grid;grid-template-columns:90px 70px 1fr;gap:8px;padding:6px 14px;border-bottom:1px solid var(--line);font-size:13px}
+.ev:last-child{border-bottom:0}
+.ev .t{color:var(--muted)}
+.tag{display:inline-block;font-size:12px;padding:0 6px;border-radius:4px;background:var(--paper)}
+.tag.alert{background:#FBE9E7;color:var(--bad)}
+.tag.marker{background:#E8EFFC;color:var(--signal)}
+.tag.crash{background:#FFF4E0;color:var(--warn)}
+
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px}
+th{font-weight:500;color:var(--muted);background:#FAFBFC}
+tr:last-child td{border-bottom:0}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:40px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font-size:16px;margin-bottom:6px}
+.msg{font-size:13px;margin-top:8px;min-height:20px}
+.msg.err{color:var(--bad)} .msg.ok{color:var(--good)}
+
+dialog{border:1px solid var(--line);border-radius:10px;padding:22px;width:min(440px,92vw)}
+dialog::backdrop{background:rgba(24,34,45,.35)}
+.hint{font-size:12px;color:var(--muted);margin:-6px 0 12px}
+
+@media (max-width:820px){.app{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <h1>PerfScope</h1>
+  <p class="sub">性能采集客户端 · Android / iOS</p>
+
+  <!-- grouped by how often testers touch them: target always open, the rest collapsible with a summary -->
+  <section class="grp fixed" aria-labelledby="gTarget">
+    <div class="gh" id="gTarget">测试对象<span class="info" tabindex="0" role="img" aria-label="说明：要测试的手机和 App。Android 需打开 USB 调试；iPhone 需点「信任此电脑」并打开开发者模式。" data-tip="要测试的手机和 App。Android 需打开 USB 调试；iPhone 需点「信任此电脑」并打开开发者模式。">?</span></div>
+    <div class="f"><span><span id="deviceLabel">设备</span><span class="info" tabindex="0" role="img" aria-label="说明：用数据线连接的手机。连接或授权后没出现，点「刷新」。" data-tip="用数据线连接的手机。连接或授权后没出现，点「刷新」。">?</span></span>
+      <div class="row">
+        <div class="combo">
+          <input type="text" id="deviceInput" role="combobox" aria-labelledby="deviceLabel" aria-expanded="false"
+            aria-controls="deviceList" readonly placeholder="没有在线设备">
+          <ul id="deviceList" role="listbox" hidden></ul>
+        </div>
+        <button class="btn" id="refreshDev" style="flex:none">刷新</button>
+      </div>
+      <input type="hidden" id="device">
+    </div>
+    <div class="f"><span><span id="appLabel">被测应用</span><span class="info" tabindex="0" role="img" aria-label="说明：可以输入包名的一部分搜索，字母按顺序出现即可匹配，如 plaudios。" data-tip="可以输入包名的一部分搜索，字母按顺序出现即可匹配，如 plaudios。">?</span></span>
+      <div class="combo">
+        <input type="text" id="appInput" role="combobox" aria-labelledby="appLabel" aria-autocomplete="list"
+          aria-expanded="false" aria-controls="appList" autocomplete="off" spellcheck="false" placeholder="搜索或选择应用">
+        <ul id="appList" role="listbox" hidden></ul>
+      </div>
+      <input type="hidden" id="app">
+    </div>
+  </section>
+
+  <details class="grp" data-g="info" open>
+    <summary><span>测试信息<span class="info" tabindex="0" role="img" aria-label="说明：用于在服务端查找、筛选、对比测试，都可以不填。" data-tip="用于在服务端查找、筛选、对比测试，都可以不填。">?</span></span><span class="gs" id="sumInfo"></span></summary>
+    <div class="gb">
+      <label class="f"><span>项目<span class="info" tabindex="0" role="img" aria-label="说明：按产品区分测试，如「Plaud iOS」。服务端的记录和趋势按项目分开，填了新名字会自动创建。" data-tip="按产品区分测试，如「Plaud iOS」。服务端的记录和趋势按项目分开，填了新名字会自动创建。">?</span></span><input type="text" id="project" value="default"></label>
+      <label class="f"><span>测试名称<span class="info" tabindex="0" role="img" aria-label="说明：这次测的场景，显示在测试记录列表里。不填则用「包名 + 开始时间」。" data-tip="这次测的场景，显示在测试记录列表里。不填则用「包名 + 开始时间」。">?</span></span><input type="text" id="name" placeholder="如：录音中切后台 2h"></label>
+      <label class="f"><span>标签（逗号分隔）<span class="info" tabindex="0" role="img" aria-label="说明：给测试归类，可填多个。同一测试方案每次都打相同标签，就能在服务端「趋势」页看各版本的变化。" data-tip="给测试归类，可填多个。同一测试方案每次都打相同标签，就能在服务端「趋势」页看各版本的变化。">?</span></span><input type="text" id="tags" placeholder="录音, 后台, v2.3 回归"></label>
+      <label class="f"><span>环境<span class="info" tabindex="0" role="img" aria-label="说明：被测包连的后端环境和区域，如 staging/US、prod/CN。会显示在测试记录的版本号后面，排查时区分是哪个环境的数据。" data-tip="被测包连的后端环境和区域，如 staging/US、prod/CN。会显示在测试记录的版本号后面，排查时区分是哪个环境的数据。">?</span></span><input type="text" id="env" placeholder="如：staging/US（可不填）"></label>
+    </div>
+  </details>
+
+  <details class="grp" data-g="collect">
+    <summary><span>采集设置<span class="info" tabindex="0" role="img" aria-label="说明：大多数情况保持默认即可。" data-tip="大多数情况保持默认即可。">?</span></span><span class="gs" id="sumCollect"></span></summary>
+    <div class="gb">
+      <div class="row">
+        <label class="f"><span>采样间隔（秒）<span class="info" tabindex="0" role="img" aria-label="说明：每隔多少秒采一次系统指标。越短越细，对手机的额外负担也越大，一般用 1 秒。" data-tip="每隔多少秒采一次系统指标。越短越细，对手机的额外负担也越大，一般用 1 秒。">?</span></span><input type="number" id="interval" value="1" min="0.5" step="0.5"></label>
+        <label class="f"><span>时长<span class="info" tabindex="0" role="img" aria-label="说明：到时间自动结束，如 2h、30m、90s。留空则一直采集，直到手动点「结束测试」。" data-tip="到时间自动结束，如 2h、30m、90s。留空则一直采集，直到手动点「结束测试」。">?</span></span><input type="text" id="duration" placeholder="留空=手动结束"></label>
+      </div>
+      <div class="f"><span>采集指标<span class="info" tabindex="0" role="img" aria-label="说明：要记录的系统指标。没勾选的不采集，也不会出现在告警阈值里。鼠标移到各项上可看说明。" data-tip="要记录的系统指标。没勾选的不采集，也不会出现在告警阈值里。鼠标移到各项上可看说明。">?</span></span><div class="checks" id="metrics"></div></div>
+      <div class="f"><span>启动耗时<span class="info" tabindex="0" role="img" aria-label="说明：开始测试前先关闭 App，再冷启动 3 次，记录每次从点开到首屏显示的耗时（取系统给出的 TotalTime），然后开始采集。仅 Android；iOS 需要 App 自己打 PERF|launch_ms|耗时 日志上报。" data-tip="开始测试前先关闭 App，再冷启动 3 次，记录每次从点开到首屏显示的耗时（取系统给出的 TotalTime），然后开始采集。仅 Android；iOS 需要 App 自己打 PERF|launch_ms|耗时 日志上报。">?</span></span><div class="checks" style="grid-template-columns:1fr"><label><input type="checkbox" id="launchOn">开始前测 3 次冷启动耗时（会先关闭 App）</label></div></div>
+      <div class="f"><span>截图<span class="info" tabindex="0" role="img" aria-label="说明：每秒截一张屏，鼠标移到曲线上可看对应时刻的画面。截图会压缩成小图，随测试一起上传。" data-tip="每秒截一张屏，鼠标移到曲线上可看对应时刻的画面。截图会压缩成小图，随测试一起上传。">?</span></span><div class="checks" style="grid-template-columns:1fr"><label><input type="checkbox" id="shotsOn" checked>每秒截一张屏幕，显示在曲线上方</label></div></div>
+    </div>
+  </details>
+
+  <details class="grp" data-g="alerts">
+    <summary><span>告警阈值<span class="info" tabindex="0" role="img" aria-label="说明：指标超过阈值时记一条告警，并在曲线上画红线。留空表示不告警，比较方向可以切换。" data-tip="指标超过阈值时记一条告警，并在曲线上画红线。留空表示不告警，比较方向可以切换。">?</span></span><span class="gs" id="sumAlerts"></span></summary>
+    <div class="gb">
+      <div class="hint">超过阈值时记一条告警并在曲线上标红线；留空表示不告警</div>
+      <div class="arows" id="alertRows"></div>
+    </div>
+  </details>
+
+  <div class="foot">
+    <button class="btn primary wide" id="startBtn">开始测试</button>
+    <div class="msg" id="setupMsg" role="status"></div>
+  </div>
+</aside>
+
+<main>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="live">实时</button>
+    <button role="tab" aria-selected="false" data-tab="history">本地记录</button>
+    <button role="tab" aria-selected="false" data-tab="plugins">插件</button>
+    <span class="spacer"></span>
+    <button id="settingsBtn">服务器设置</button>
+  </div>
+
+  <section id="tab-live">
+    <div id="liveBody"></div>
+  </section>
+
+  <section id="tab-history" hidden>
+    <div id="historyBody"></div>
+    <div id="histView" hidden></div>
+  </section>
+
+  <section id="tab-plugins" hidden>
+    <div id="pluginsBody"></div>
+  </section>
+</main>
+</div>
+
+<dialog id="settings">
+  <h2>服务器设置</h2>
+  <label class="f"><span>服务器地址<span class="info" tabindex="0" role="img" aria-label="说明：团队共用的 PerfScope 服务端地址，测试数据上传到这里。" data-tip="团队共用的 PerfScope 服务端地址，测试数据上传到这里。">?</span></span><input type="text" id="sUrl" placeholder="http://perfscope.internal:9000"></label>
+  <label class="f"><span>用户名<span class="info" tabindex="0" role="img" aria-label="说明：上传的记录会显示为这个名字，只有上传者可以修改或删除自己的记录。" data-tip="上传的记录会显示为这个名字，只有上传者可以修改或删除自己的记录。">?</span></span><input type="text" id="sUser" placeholder="上传记录会显示为这个名字"></label>
+  <label class="f"><span>访问令牌<span class="info" tabindex="0" role="img" aria-label="说明：服务端开启令牌认证时由管理员提供，没开启就留空。" data-tip="服务端开启令牌认证时由管理员提供，没开启就留空。">?</span></span><input type="text" id="sToken"></label>
+  <label class="f" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sAuto">
+    <span style="margin:0;color:var(--ink);font-size:13px">测试结束后自动上传<span class="info" tabindex="0" role="img" aria-label="说明：测试结束后自动上传到服务端，不用再去「本地记录」里手动上传。" data-tip="测试结束后自动上传到服务端，不用再去「本地记录」里手动上传。">?</span></span></label>
+  <div class="row" style="justify-content:flex-end">
+    <button class="btn" id="sCancel" style="flex:none">取消</button>
+    <button class="btn primary" id="sSave" style="flex:none">保存设置</button>
+  </div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (path, opt = {}) => {
+  const r = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opt});
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || `请求失败 ${r.status}`);
+  return body;
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// what each built-in metric means, shown in bubbles next to checkboxes, thresholds and live readouts
+const METRIC_TIPS = {
+  cpu: "被测 App 占整机 CPU 的百分比（已按核心数折算）。",
+  mem_pss: "Android 内存 PSS：App 实际占用的物理内存，共享内存按比例分摊。长时间测试中持续上涨通常意味着泄漏。",
+  mem_footprint: "iOS 内存 Footprint：和 Xcode 内存仪表、系统内存上限判断用的是同一个值。持续上涨通常意味着泄漏。",
+  threads: "App 当前的线程数。反复操作后只涨不降，可能有线程泄漏。",
+  fps: "每秒渲染的帧数。界面静止时为 0 属正常；iOS 统计的是整个屏幕。",
+  jank_count: "每分钟的 Jank 次数（PerfDog 口径）：某一帧耗时超过前 3 帧平均的 2 倍，且超过 83.3 ms。用户能明显感到卡一下。仅 Android。",
+  big_jank: "每分钟的 BigJank 次数：同 Jank，但这一帧超过 125 ms，属于严重卡顿。BigJank 也计入 Jank。仅 Android。",
+  stutter: "卡顿率：Jank 帧耗时之和占这段时间的比例。越低越流畅。仅 Android。",
+  net_rx: "每秒下载的数据量。Android 是整机流量，iOS 只统计被测 App。",
+  net_tx: "每秒上传的数据量。Android 是整机流量，iOS 只统计被测 App。",
+  battery_level: "手机剩余电量百分比。",
+  battery_temp: "电池温度。持续偏高会导致系统降频，影响其他指标。",
+  current: "电池电流，反映耗电快慢；部分 Android 机型不提供。",
+};
+/* ---------- tooltips: one bubble for the whole page ----------
+   data-tip="..."   explains an element (info icons, buttons, metric names)
+   .trunc / .gs / .al / .combo input / .k   show their full text when cut off by an ellipsis
+   Shown on hover and on keyboard focus of info icons; Esc hides it. */
+const TIP_TRUNC = ".trunc, .gs, .al, .combo input, .ro .k";
+const tipEl = Object.assign(document.createElement("div"), {className: "tip", id: "tip", role: "tooltip"});
+document.body.appendChild(tipEl);
+let tipFor = null, tipTimer = null;
+function tipText(el) {
+  const parts = [];
+  if (el.matches(TIP_TRUNC)) {
+    const full = (el.matches("input") ? el.value : el.textContent).trim();
+    if (full && el.scrollWidth > el.clientWidth + 1) parts.push(full);
+  }
+  if (el.dataset.tip) parts.push(el.dataset.tip);
+  return parts.join("\n");
+}
+function showTip(el) {
+  const text = tipText(el);
+  if (!text || el.getAttribute("aria-expanded") === "true") return hideTip();   // an open dropdown needs no bubble
+  tipFor = el; tipEl.textContent = text; tipEl.classList.remove("below");
+  tipEl.style.left = "0px"; tipEl.style.top = "0px"; tipEl.classList.add("show");
+  const r = el.getBoundingClientRect(), w = tipEl.offsetWidth, h = tipEl.offsetHeight, gap = 8;
+  const below = r.top < h + gap + 4;
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  tipEl.style.left = left + "px";
+  tipEl.style.top = (below ? r.bottom + gap : r.top - h - gap) + "px";
+  tipEl.style.setProperty("--ax", Math.min(Math.max(12, r.left + r.width / 2 - left), w - 12) + "px");
+  tipEl.classList.toggle("below", below);
+  el.setAttribute("aria-describedby", "tip");
+}
+function hideTip() {
+  clearTimeout(tipTimer);
+  tipEl.classList.remove("show");
+  tipFor?.removeAttribute("aria-describedby"); tipFor = null;
+}
+const tipTarget = n => n?.closest?.(`[data-tip], ${TIP_TRUNC}`);
+document.addEventListener("mouseover", e => {
+  const el = tipTarget(e.target);
+  if (el === tipFor) return;
+  clearTimeout(tipTimer);
+  if (!el) return hideTip();
+  tipTimer = setTimeout(() => showTip(el), el.classList.contains("info") ? 80 : 350);
+});
+document.addEventListener("mouseout", e => { if (tipFor && !tipFor.contains(e.relatedTarget)) hideTip(); else clearTimeout(tipTimer); });
+document.addEventListener("focusin", e => { if (e.target.classList?.contains("info")) showTip(e.target); });
+document.addEventListener("focusout", hideTip);
+document.addEventListener("keydown", e => { if (e.key === "Escape") hideTip(); });
+document.addEventListener("scroll", hideTip, true);
+window.addEventListener("resize", hideTip);
+// info icons sit inside labels and <summary>: hovering explains, clicking must not toggle the group or focus the field
+document.addEventListener("click", e => { if (e.target.closest?.(".info")) { e.preventDefault(); e.stopPropagation(); } }, true);
+const info = text => `<span class="info" tabindex="0" role="img" aria-label="说明：${esc(text)}" data-tip="${esc(text)}">?</span>`;
+const fmtTime = ts => new Date(ts).toLocaleTimeString("zh-CN", {hour12: false});
+const fmtDate = ts => new Date(ts).toLocaleString("zh-CN", {hour12: false});
+// "UTC+8" for this browser's zone at that moment, and the same instant in UTC
+const tzName = ts => { const m = -new Date(ts).getTimezoneOffset(), h = Math.trunc(m / 60), r = Math.abs(m % 60);
+  return `UTC${m >= 0 ? "+" : "-"}${Math.abs(h)}${r ? ":" + String(r).padStart(2, "0") : ""}`; };
+const fmtUtc = (ts, withDate) => new Date(ts).toLocaleString("zh-CN", {hour12: false, timeZone: "UTC",
+  ...(withDate ? {} : {hour: "2-digit", minute: "2-digit", second: "2-digit"})}) + " UTC";
+const COPY_ICON = `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8.5 2.5V2A1.5 1.5 0 0 0 7 .5H2A1.5 1.5 0 0 0 .5 2v5A1.5 1.5 0 0 0 2 8.5h.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
+const fmtDur = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return (h ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(x).padStart(2, "0"); };
+
+let META = {}, apps = [], settings = {};
+const metaOf = m => META[m] || (m.startsWith("biz.") ? {label: m.slice(4), unit: "", order: 1000}
+  : m.startsWith("page.") ? {label: `页面加载：${m.slice(5)}`, unit: "ms", better: "lower", order: 900} : {label: m, unit: "", order: 500});
+const rank = m => metaOf(m).order ?? 500;
+const EVT = {marker: ["标记", "marker"], alert: ["告警", "alert"], process_restart: ["重启", "crash"],
+             process_dead: ["进程退出", "crash"], process_start: ["进程启动", "marker"], error: ["错误", "alert"],
+             crash: ["闪退", "crash"], jetsam: ["内存超限", "crash"], fault: ["异常报告", "alert"], anr: ["ANR", "crash"],
+             launch: ["冷启动", "marker"]};
+/* ---------- crash log viewer: events that carry a log open it in a dialog ---------- */
+const LOG_KINDS = new Set(["crash", "jetsam", "fault"]);
+const isRedEvent = t => t === "alert" || t === "anr" || LOG_KINDS.has(t);
+async function copyLog(text) {
+  try { await navigator.clipboard.writeText(text); return; } catch {}
+  const t = Object.assign(document.createElement("textarea"), {value: text});
+  t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select();
+  document.execCommand("copy"); t.remove();
+}
+function showLog(att) {
+  let d = document.getElementById("logDlg");
+  if (!d) {
+    d = Object.assign(document.createElement("dialog"), {id: "logDlg", className: "logdlg"});
+    d.setAttribute("aria-labelledby", "logDlgTitle");
+    d.innerHTML = `<div class="logh"><h3 id="logDlgTitle"></h3>
+      <button class="btn" data-copy>复制日志</button><button class="btn ghost" data-close>关闭</button></div><pre tabindex="0"></pre>`;
+    document.body.appendChild(d);
+    d.querySelector("[data-close]").onclick = () => d.close();
+    d.querySelector("[data-copy]").onclick = async e => {
+      await copyLog(d.querySelector("pre").textContent);
+      e.target.textContent = "已复制"; setTimeout(() => e.target.textContent = "复制日志", 1500);
+    };
+    d.addEventListener("click", e => { if (e.target === d) d.close(); });   // click on the backdrop
+  }
+  d.querySelector("h3").textContent = att.title;
+  d.querySelector("pre").textContent = att.text;
+  d.showModal();
+  d.querySelector("pre").scrollTop = 0;
+}
+// the log of an event: attachments are stored with the same timestamp as their event
+const logFor = (atts, ts) => (atts || []).find(a => a.ts === ts);
+const logButton = (atts, ts, t) => LOG_KINDS.has(t) && logFor(atts, ts)
+  ? ` <button type="button" class="lnk" data-logts="${ts}">查看日志</button>` : "";
+
+
+/* ---------- charts ---------- */
+class ChartSet {
+  constructor(container) { this.el = container; this.charts = {}; this.data = {}; this.events = []; this.t0 = null; }
+  ensure(metric) {
+    if (this.charts[metric]) return;
+    const m = metaOf(metric);
+    const box = document.createElement("div");
+    box.className = "chart";
+    box.innerHTML = `<h3>${esc(m.label)}${m.unit ? ` <span style="color:var(--muted)">(${esc(m.unit)})</span>` : ""}</h3><div class="c"></div>`;
+    // fixed order: built-in metrics first, business metrics after
+    const isBiz = metric.startsWith("biz.") || metric.startsWith("page.");   // sparse values: draw the dots
+    box.dataset.rank = rank(metric);
+    const after = [...this.el.children].find(c => +c.dataset.rank > rank(metric));
+    after ? this.el.insertBefore(box, after) : this.el.appendChild(box);
+    const c = echarts.init(box.querySelector(".c"));
+    c.setOption({
+      grid: {left: 44, right: 12, top: 14, bottom: 24},
+      tooltip: {trigger: "axis", valueFormatter: v => v == null ? "-" : `${v} ${m.unit}`},
+      xAxis: {type: "time", minInterval: 1000, splitNumber: 5,
+        axisLabel: {color: "#5E6C79", fontSize: 11, hideOverlap: true}, axisLine: {lineStyle: {color: "#D9DFE4"}}},
+      yAxis: {type: "value", scale: true, min: m.min, max: m.max, axisLabel: {color: "#5E6C79", fontSize: 11}, splitLine: {lineStyle: {color: "#EEF1F3"}}},
+      series: [{type: "line", showSymbol: isBiz, symbolSize: 4, sampling: "lttb", data: [],
+        lineStyle: {width: 1.6, color: isBiz ? "#B7791F" : "#1E5BD8"}, itemStyle: {color: isBiz ? "#B7791F" : "#1E5BD8"},
+        markLine: {symbol: "none", silent: true, data: []}}],
+      animation: false,
+    });
+    // hovering any chart tells the screenshot viewer which moment to show
+    c.on("updateAxisPointer", e => { const v = e.axesInfo?.[0]?.value; if (v != null) this.onHover?.(v); });
+    c.getZr().on("globalout", () => this.onLeave?.());
+    this.charts[metric] = c; this.data[metric] = [];
+  }
+  addPoints(points) {
+    const touched = new Set();
+    for (const [ts, m, v] of points) { this.ensure(m); this.data[m].push([ts, v]); touched.add(m); }
+    touched.forEach(m => this.charts[m].setOption({series: [{data: this.data[m]}]}));
+  }
+  addEvents(events) {
+    if (!events.length) return;
+    this.events.push(...events);
+    const lines = this.events.filter(e => e[1] !== "error").map(([ts, t, label]) => ({
+      xAxis: ts, label: {show: false}, name: label,
+      lineStyle: {color: isRedEvent(t) ? "#C2352B" : t.startsWith("process") ? "#B7791F" : "#1E5BD8", type: "dashed", width: 1}}));
+    Object.values(this.charts).forEach(c => c.setOption({series: [{markLine: {data: lines}}]}));
+  }
+  resize() { Object.values(this.charts).forEach(c => c.resize()); }
+  dispose() { Object.values(this.charts).forEach(c => c.dispose()); }
+}
+
+/* ---------- screenshots ---------- */
+class ShotViewer {
+  // follow: show the newest frame unless the user is hovering a chart or picked a time (live view)
+  constructor(el, urlOf, follow) {
+    Object.assign(this, {el, urlOf, follow, ts: [], cur: null, hovering: false, pinned: null});
+    el.hidden = true;
+    el.innerHTML = `<div class="shots">
+      <div class="shotimg"><img alt="手机屏幕截图"></div>
+      <div class="shotinfo">
+        <div class="shotjump">
+          <input type="text" class="shottime" inputmode="numeric" spellcheck="false" aria-label="跳转到时间，格式 时:分:秒"
+            data-tip="输入时间后按回车或点击空白处，跳到最接近的截图，如 19:49:52、19:49 或 194952；按 Esc 取消">
+          ${follow ? `<button class="btn ghost shotlatest" hidden>回到最新</button>` : ""}
+        </div>
+        <small class="shotpos"></small>
+        <input type="range" class="shotrange" min="0" max="0" value="0" aria-label="拖动查看各时刻的截图">
+        <small>鼠标移到下方任意曲线上，这里会显示那一刻的手机画面；也可以拖动滑块，或在上方输入时间，按回车或点击空白处跳转。</small>
+      </div></div>`;
+    this.img = el.querySelector("img"); this.range = el.querySelector(".shotrange"); this.time = el.querySelector(".shottime");
+    this.range.oninput = () => this.pin(this.ts[+this.range.value]);
+    this.time.onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); this.jump(); }
+      else if (e.key === "Escape") { this.time.value = fmtTime(this.cur); this.time.blur(); }   // Esc cancels
+    };
+    this.time.onfocus = () => this.time.select();
+    // clicking elsewhere confirms like Enter; an unreadable time falls back to the frame shown
+    this.time.onblur = () => {
+      const text = this.time.value.trim();
+      if (text && text !== fmtTime(this.cur)) { const t = this.parseTime(text); if (t != null) { this.pin(t); return; } }
+      this.label();
+    };
+    el.querySelector(".shotlatest")?.addEventListener("click", () => { this.pinned = null; this.leave(); });
+  }
+  add(list) {
+    if (!list.length) return;
+    this.ts.push(...list); this.el.hidden = false; this.range.max = this.ts.length - 1;
+    if (this.cur == null || (this.follow && !this.hovering && this.pinned == null)) this.show(this.ts[this.ts.length - 1]);
+    else this.label();
+  }
+  nearest(t) {
+    let lo = 0, hi = this.ts.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (this.ts[mid] < t) lo = mid + 1; else hi = mid; }
+    return lo > 0 && t - this.ts[lo - 1] < this.ts[lo] - t ? lo - 1 : lo;
+  }
+  show(t) {
+    if (!this.ts.length) return;
+    const i = this.nearest(t), ts = this.ts[i];
+    if (ts !== this.cur) { this.cur = ts; this.img.src = this.urlOf(ts); }
+    this.range.value = i; this.label();
+  }
+  label() {
+    const i = this.ts.indexOf(this.cur);
+    if (document.activeElement !== this.time) { this.time.value = fmtTime(this.cur); this.time.classList.remove("bad"); }
+    this.el.querySelector(".shotpos").textContent = `第 ${i + 1} / ${this.ts.length} 张`;
+    const latest = this.el.querySelector(".shotlatest");
+    if (latest) latest.hidden = this.pinned == null;
+  }
+  // "19:49:52", "19:49", "194952", "1949" -> that moment within this run (a run may cross midnight)
+  parseTime(text) {
+    const s = text.trim().replace(/：/g, ":");
+    const m = s.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/) || s.match(/^(\d{2})(\d{2})(\d{2})?$/);
+    if (!m) return null;
+    const [h, mi, se] = [+m[1], +m[2], +(m[3] || 0)];
+    if (h > 23 || mi > 59 || se > 59) return null;
+    const first = this.ts[0], last = this.ts[this.ts.length - 1];
+    const dist = t => t < first ? first - t : t > last ? t - last : 0;
+    return [first, last].map(ref => { const d = new Date(ref); d.setHours(h, mi, se, 0); return d.getTime(); })
+      .sort((a, b) => dist(a) - dist(b))[0];
+  }
+  jump() {
+    const t = this.parseTime(this.time.value);
+    if (t == null) { this.time.classList.add("bad"); return; }
+    this.pin(t); this.time.blur();
+  }
+  pin(t) { this.pinned = t; this.show(t); }
+  hover(t) { this.hovering = true; this.show(t); }
+  leave() {
+    this.hovering = false;
+    if (this.pinned != null) this.show(this.pinned);
+    else if (this.follow) this.show(this.ts[this.ts.length - 1]);
+    this.label();
+  }
+}
+function linkShots(charts, viewer) { charts.onHover = t => viewer.hover(t); charts.onLeave = () => viewer.leave(); }
+
+/* ---------- setup panel ---------- */
+async function loadDevices() {
+  try {
+    const list = await api("/api/devices");
+    const online = list.filter(d => d.state === "device");
+    const pf = {android: "Android", ios: "iOS"};
+    const before = deviceCombo.value;
+    deviceCombo.setItems(online.map(d => ({value: `${d.platform}|${d.serial}`, text: `${pf[d.platform] || d.platform} · ${d.model || d.serial}`,
+                                           tip: `序列号 ${d.serial}`})));
+    // devices that are connected but not usable yet (USB debugging not allowed, iPhone not trusted, ...)
+    const blocked = list.filter(d => d.state !== "device").map(d =>
+      `${pf[d.platform] || d.platform} ${d.model || d.serial}：${d.error || (d.state === "unauthorized" ? "请在手机上允许调试 / 信任此电脑" : d.state)}`);
+    setMsg("setupMsg", blocked.length ? blocked.join("；") : online.length ? ""
+      : "用 USB 连接手机（Android 开启 USB 调试；iPhone 点「信任此电脑」并打开开发者模式），然后点刷新",
+      blocked.length || !online.length ? "err" : "");
+    if (online.length && (!deviceCombo.value || deviceCombo.value !== before || !apps.length)) {
+      if (!deviceCombo.value) deviceCombo.set(online[0] && `${online[0].platform}|${online[0].serial}`);
+      await onDeviceChange();
+    }
+  } catch (e) { deviceCombo.setItems([]); deviceCombo.input.placeholder = "无法读取设备"; setMsg("setupMsg", e.message, "err"); }
+}
+async function loadApps() {
+  const [platform, serial] = $("#device").value.split("|"); if (!serial) return;
+  try { apps = await api(`/api/devices/${encodeURIComponent(platform)}/${encodeURIComponent(serial)}/apps`); renderApps(); }
+  catch (e) { setMsg("setupMsg", e.message, "err"); }
+}
+/* ---------- app picker: fuzzy search, single select, shows the chosen app ---------- */
+// Substring matches rank first; otherwise the letters must appear in order ("plaudios" finds ai.plaud.ios.plaud).
+function fuzzy(q, text) {
+  if (!q) return {score: 0, idx: []};
+  const t = text.toLowerCase(), at = t.indexOf(q);
+  if (at >= 0) return {score: 1000 - at - text.length / 100, idx: [...Array(q.length).keys()].map(k => k + at)};
+  const idx = [];
+  for (let j = 0, i = 0; j < t.length && i < q.length; j++) if (t[j] === q[i]) { idx.push(j); i++; }
+  if (idx.length < q.length) return null;
+  return {score: 500 - (idx[idx.length - 1] - idx[0]) - text.length / 100, idx};
+}
+/* Dropdown used for both device and app: same look, keyboard support, single select.
+   searchable: typing filters with fuzzy(); the chosen item always shows in the box. */
+class Combo {
+  constructor({input, list, hidden, searchable, empty, onPick}) {
+    Object.assign(this, {input: $(input), list: $(list), hidden: $(hidden), searchable, empty, onPick,
+                         items: [], matches: [], active: -1});
+    const inp = this.input;
+    inp.addEventListener("mousedown", () => { this.wasOpen = this.isOpen(); });
+    inp.addEventListener("focus", () => { if (searchable) inp.select(); this.openWith(""); });
+    inp.addEventListener("click", () => {
+      if (this.wasOpen) this.close(); else if (!this.isOpen()) this.openWith("");
+      this.wasOpen = false;
+    });
+    inp.addEventListener("input", () => this.openWith(inp.value));
+    inp.addEventListener("keydown", e => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!this.isOpen()) this.openWith(""); else this.move(e.key === "ArrowDown" ? 1 : -1);
+      } else if (e.key === "Enter" && this.isOpen()) {
+        e.preventDefault(); const x = this.matches[this.active]; if (x) this.pick(x.it.value);
+      } else if (e.key === "Escape" && this.isOpen()) { e.preventDefault(); this.close(); }
+    });
+    inp.addEventListener("blur", () => this.close());
+    // mousedown (not click) so the input does not blur and close the list first
+    this.list.addEventListener("mousedown", e => {
+      e.preventDefault();
+      const li = e.target.closest("li[data-i]"); if (li) this.pick(this.matches[+li.dataset.i].it.value);
+    });
+  }
+  get value() { return this.hidden.value; }
+  textOf(v) { return this.items.find(it => it.value === v)?.text ?? ""; }
+  setItems(items) {
+    this.items = items;
+    if (!items.some(it => it.value === this.value)) this.set(items.length === 1 ? items[0].value : "");
+    else this.input.value = this.textOf(this.value);
+    if (this.isOpen()) this.filter("");
+  }
+  set(v) { this.hidden.value = v || ""; this.input.value = this.textOf(v); this.input.dataset.tip = this.items.find(it => it.value === v)?.tip || ""; }
+  pick(v) { const changed = v !== this.value; this.set(v); this.close(); if (changed) this.onPick?.(v); }
+  isOpen() { return !this.list.hidden; }
+  openWith(q) {
+    this.filter(q); this.list.hidden = false; this.input.setAttribute("aria-expanded", "true");
+    this.input.parentElement.classList.add("open");
+  }
+  close() {
+    this.list.hidden = true; this.input.setAttribute("aria-expanded", "false");
+    this.input.parentElement.classList.remove("open");
+    this.input.value = this.textOf(this.value);   // typed text that wasn't picked reverts to the selection
+  }
+  filter(q) {
+    q = this.searchable ? q.trim().toLowerCase().replace(/\s+/g, "") : "";
+    this.matches = this.items.map(it => ({it, m: fuzzy(q, it.text)})).filter(x => x.m);
+    if (q) this.matches.sort((x, y) => y.m.score - x.m.score || x.it.text.localeCompare(y.it.text));
+    this.active = Math.max(0, this.matches.findIndex(x => x.it.value === this.value));
+    this.render();
+  }
+  render() {
+    const id = this.list.id;
+    const hl = (t, idx) => { const set = new Set(idx); return [...t].map((ch, i) => set.has(i) ? `<mark>${esc(ch)}</mark>` : esc(ch)).join(""); };
+    this.list.innerHTML = this.matches.length ? this.matches.map((x, i) =>
+      `<li role="option" id="${id}${i}" data-i="${i}" ${x.it.tip ? `data-tip="${esc(x.it.tip)}"` : ""} aria-selected="${x.it.value === this.value}" class="${i === this.active ? "active" : ""}"><span>${hl(x.it.text, x.m.idx)}</span>${x.it.sub ? `<small>${esc(x.it.sub)}</small>` : ""}</li>`).join("")
+      : `<li class="none">${esc(this.items.length ? "没有匹配的选项" : this.empty)}</li>`;
+    this.input.setAttribute("aria-activedescendant", this.matches.length ? `${id}${this.active}` : "");
+    this.list.querySelector(".active")?.scrollIntoView({block: "nearest"});
+  }
+  move(d) {
+    if (!this.matches.length) return;
+    this.active = (this.active + d + this.matches.length) % this.matches.length; this.render();
+  }
+}
+const appCombo = new Combo({input: "#appInput", list: "#appList", hidden: "#app", searchable: true,
+                            empty: "没有读取到应用，请先选择设备"});
+const deviceCombo = new Combo({input: "#deviceInput", list: "#deviceList", hidden: "#device", searchable: false,
+                               empty: "没有在线设备，连接手机后点刷新", onPick: () => onDeviceChange()});
+function setApp(a) { appCombo.set(a); }
+function renderApps() { appCombo.setItems(apps.map(a => ({value: a, text: a}))); }
+function setMsg(id, text, kind = "") { const el = document.getElementById(id); el.textContent = text; el.className = "msg " + kind; }
+
+/* ---------- alert thresholds & business metrics ---------- */
+const defaultOp = meta => meta?.better === "higher" ? "<" : ">";
+let alertVals = {};   // metric -> {op, thr}; survives re-rendering when metrics are toggled
+// comparison toggle: only ">" and "<" exist, so one click flips it (no native menu)
+const OP_TIP = {">": "高于阈值时告警，点击切换为低于", "<": "低于阈值时告警，点击切换为高于"};
+const opToggle = (cls, op) => `<button type="button" class="op ${cls}" data-op="${op}" data-tip="${OP_TIP[op]}" aria-label="${op === ">" ? "高于" : "低于"}阈值时告警，点击切换">${op}</button>`;
+
+function renderAlertRows() {
+  const keys = [...document.querySelectorAll("#metrics input:checked")].map(i => i.value);
+  $("#alertRows").innerHTML = keys.length ? keys.map(k => {
+    const m = META[k] || {}, v = alertVals[k] || {};
+    return `<div class="arow" data-k="${esc(k)}"><span class="al" data-tip="${esc(METRIC_TIPS[k] || k)}">${esc(m.label || k)}</span>
+      ${opToggle("aop", v.op || defaultOp(m))}
+      <input type="number" class="athr" step="any" value="${esc(v.thr ?? "")}" aria-label="${esc(m.label || k)} 告警阈值" placeholder="不告警">
+      <span class="au">${esc(m.unit || "")}</span></div>`; }).join("")
+    : `<span class="hint">先勾选要采集的指标</span>`;
+}
+$("#alertRows").addEventListener("click", e => {
+  const b = e.target.closest("button.op"); if (!b) return;
+  const op = b.dataset.op === ">" ? "<" : ">";
+  Object.assign(b, {textContent: op}); b.dataset.op = op; b.dataset.tip = OP_TIP[op];
+  b.setAttribute("aria-label", `${op === ">" ? "高于" : "低于"}阈值时告警，点击切换`);
+  b.dispatchEvent(new Event("input", {bubbles: true}));
+  if (typeof showTip === "function") showTip(b);   // refresh the bubble to the new meaning
+});
+$("#alertRows").addEventListener("input", e => {
+  const row = e.target.closest(".arow"); if (!row) return;
+  alertVals[row.dataset.k] = {op: row.querySelector(".aop").dataset.op, thr: row.querySelector(".athr").value};
+});
+$("#metrics").addEventListener("change", renderAlertRows);
+
+// -> {metric: "> 800"} from the threshold rows; blank rows mean no alert
+function collectAlerts() {
+  const alerts = {};
+  for (const row of document.querySelectorAll("#alertRows .arow")) {
+    const thr = row.querySelector(".athr").value.trim();
+    if (thr !== "") alerts[row.dataset.k] = `${row.querySelector(".aop").dataset.op} ${thr}`;
+  }
+  return alerts;
+}
+
+/* ---------- sidebar groups: one-line summary when collapsed, open state remembered ---------- */
+function updateSummaries() {
+  const tags = $("#tags").value.split(/[,，]/).map(t => t.trim()).filter(Boolean);
+  $("#sumInfo").textContent = [$("#project").value.trim() !== "default" && $("#project").value.trim(),
+    $("#name").value.trim() || "未命名", tags.length && `${tags.length} 个标签`, $("#env").value.trim()].filter(Boolean).join(" · ");
+  const nMetrics = document.querySelectorAll("#metrics input:checked").length;
+  $("#sumCollect").textContent = [`每 ${$("#interval").value || 1} 秒`, $("#duration").value.trim() || "手动结束",
+    `${nMetrics} 项指标`, $("#launchOn").checked && "测启动", $("#shotsOn").checked && "截图"].filter(Boolean).join(" · ");
+  const nAlerts = [...document.querySelectorAll("#alertRows .athr")].filter(i => i.value.trim() !== "").length;
+  $("#sumAlerts").textContent = nAlerts ? `${nAlerts} 条` : "未设置";
+}
+["input", "change", "click"].forEach(ev => document.querySelector("aside").addEventListener(ev, () => queueMicrotask(updateSummaries)));
+function openGroup(g) { const d = document.querySelector(`details.grp[data-g="${g}"]`); if (d) { d.open = true; d.scrollIntoView({block: "nearest"}); } }
+(function restoreGroups() {
+  let st = {};
+  try { st = JSON.parse(localStorage.getItem("perfscope.groups") || "{}"); } catch {}
+  document.querySelectorAll("details.grp").forEach(d => {
+    if (d.dataset.g in st) d.open = !!st[d.dataset.g];
+    d.addEventListener("toggle", () => {
+      const now = {};
+      document.querySelectorAll("details.grp").forEach(x => now[x.dataset.g] = x.open);
+      try { localStorage.setItem("perfscope.groups", JSON.stringify(now)); } catch {}
+    });
+  });
+})();
+
+async function start() {
+  try {
+    if (!$("#device").value) throw new Error("请先选择设备");
+    if (!$("#app").value) throw new Error("请选择被测应用");
+    const [platform, serial] = $("#device").value.split("|");
+    const body = {
+      platform, serial, package: $("#app").value,
+      project: $("#project").value.trim() || "default", name: $("#name").value.trim(),
+      tags: $("#tags").value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
+      env: $("#env").value.trim(),
+      interval: parseFloat($("#interval").value) || 1, duration: $("#duration").value.trim() || null,
+      metrics: [...document.querySelectorAll("#metrics input:checked")].map(i => i.value),
+      alerts: collectAlerts(),
+      screenshots: $("#shotsOn").checked ? {interval: 1} : null,
+      launch: $("#launchOn").checked ? {cold: 3} : null,
+    };
+    if (!body.metrics.length) throw new Error("至少选择一项指标");
+    $("#startBtn").disabled = true;
+    await api("/api/run/start", {method: "POST", body: JSON.stringify(body)});
+    localStorage.setItem("perfscope.form", JSON.stringify({...body, alertVals}));
+    setMsg("setupMsg", "");
+    live.reset(); switchTab("live"); live.poll();
+  } catch (e) {
+    setMsg("setupMsg", e.message, "err");
+    if (/告警/.test(e.message)) openGroup("alerts");
+    else if (/指标|时长|间隔/.test(e.message)) openGroup("collect");
+  }
+  finally { if (live.run?.status !== "running") $("#startBtn").disabled = false; }
+}
+
+/* ---------- live view ---------- */
+const live = {
+  since: 0, sinceShot: 0, shots: null, charts: null, latest: {}, alerting: new Set(), run: null, timer: null, uploadedFor: null,
+  reset() { this.run = null; this.since = 0; this.sinceShot = 0; this.shots = null; this.latest = {}; this.alerting = new Set(); this.charts?.dispose(); this.charts = null; this.render(); },
+  render() {
+    const body = $("#liveBody");
+    if (!this.run) {
+      body.innerHTML = `<div class="empty"><b>还没有开始测试</b>在左侧选择设备和应用，点「开始测试」。测试过程中可以随时打标记，比如“开始录音”“切到后台”。</div>`;
+      return;
+    }
+    if (!this.charts) {
+      body.innerHTML = `
+        <div class="runbar">
+          <span class="dot" id="runDot"></span>
+          <div><div class="name" id="runName"></div><div style="font-size:12px;color:var(--muted)" id="runInfo"></div></div>
+          <span class="clock" id="runClock">00:00</span>
+          <span class="grow"></span>
+          <input type="text" id="markerText" placeholder="标记内容，如：切到后台" aria-label="标记内容">
+          <button class="btn" id="markerBtn">打标记</button>
+          <button class="btn danger" id="stopBtn">结束测试</button>
+        </div>
+        <div class="rack" id="rack"></div>
+        <div id="liveShots"></div>
+        <div class="charts" id="charts"></div>
+        <h2 style="margin-top:20px">事件<span class="info" tabindex="0" role="img" aria-label="说明：测试中的关键时刻：手动或 App 打的标记、触发的告警、App 退出或重启、采集出错。每个事件也会在曲线上画一条竖线。" data-tip="测试中的关键时刻：手动或 App 打的标记、触发的告警、App 退出或重启、采集出错。每个事件也会在曲线上画一条竖线。">?</span></h2>
+        <div class="events" id="events"></div>`;
+      this.charts = new ChartSet($("#charts"));
+      this.shots = new ShotViewer($("#liveShots"), ts => `/api/sessions/${this.run.id}/shots/${ts}`, true);
+      linkShots(this.charts, this.shots);
+      $("#markerBtn").onclick = () => this.marker();
+      $("#markerText").onkeydown = e => { if (e.key === "Enter") this.marker(); };
+      $("#stopBtn").onclick = () => this.stop();
+      $("#events").addEventListener("click", e => {
+        const b = e.target.closest("[data-logts]"); if (b) showLog(logFor(this.atts, +b.dataset.logts));
+      });
+    }
+    const r = this.run, running = r.status === "running";
+    $("#runDot").className = "dot" + (running ? " on" : "");
+    $("#runName").textContent = r.package;
+    $("#runInfo").textContent = `${r.serial} · ${running ? "采集中" : "已结束"}${r.last_error ? " · 最近错误：" + r.last_error : ""}`;
+    $("#runClock").textContent = fmtDur((Date.now() - r.started_at) / 1000) + (r.duration ? ` / ${fmtDur(r.duration)}` : "");
+    ["markerBtn", "stopBtn", "markerText"].forEach(id => $("#" + id).disabled = !running);
+    $("#startBtn").disabled = running;
+  },
+  renderRack() {
+    const keys = Object.keys(this.latest).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+    $("#rack").innerHTML = keys.map(k => { const m = metaOf(k);
+      return `<div class="ro ${this.alerting.has(k) ? "alert" : ""}"><div class="k" ${METRIC_TIPS[k] ? `data-tip="${esc(METRIC_TIPS[k])}"` : ""}>${esc(m.label)}</div><div class="v">${this.latest[k]}<small>${esc(m.unit)}</small></div></div>`; }).join("");
+  },
+  renderEvents(evs) {
+    const box = $("#events");
+    if (!box) return;
+    for (const [ts, t, label] of evs) {
+      const [name, cls] = EVT[t] || [t, ""];
+      box.insertAdjacentHTML("afterbegin", `<div class="ev"><span class="t">${fmtTime(ts)}</span><span><span class="tag ${cls}">${esc(name)}</span></span><span>${esc(label)}${logButton(this.atts, ts, t)}</span></div>`);
+      if (t === "alert") this.alerting.add(label.split(" ")[0]);
+    }
+    // placeholder only while there are no real events (toggling it every poll made it flicker)
+    if (evs.length) box.querySelector(".ev.none")?.remove();
+    else if (!box.children.length) box.innerHTML = `<div class="ev none" style="display:block;color:var(--muted)">暂无事件</div>`;
+  },
+  async poll() {
+    clearTimeout(this.timer);
+    try {
+      const d = await api(`/api/run/live?since=${this.since}&since_shot=${this.sinceShot}`);
+      this.run = d.run; this.atts = d.attachments || []; Object.assign(META, d.metric_meta || {}); this.render();
+      if (d.run) {
+        const pts = d.points || [], evs = d.events || [];
+        if (pts.length) { this.charts.addPoints(pts); pts.forEach(([, m, v]) => this.latest[m] = v); }
+        this.charts.addEvents(evs); this.renderEvents(evs);
+        const shots = d.shots || [];
+        if (shots.length) { this.shots.add(shots); this.sinceShot = shots[shots.length - 1]; }
+        if (pts.length || evs.length) this.renderRack();
+        const maxTs = Math.max(this.since, ...pts.map(p => p[0]), ...evs.map(e => e[0]));
+        this.since = maxTs;
+        if (d.run.status !== "running") { this.onFinished(); return; }
+      }
+    } catch (e) { /* client service restarting; try again */ }
+    this.timer = setTimeout(() => this.poll(), 1000);
+  },
+  async onFinished() {
+    loadHistory();
+    if (settings.auto_upload && this.uploadedFor !== this.run.id) {
+      this.uploadedFor = this.run.id;
+      try { const r = await api(`/api/sessions/${this.run.id}/upload`, {method: "POST"});
+        $("#runInfo").innerHTML += ` · <a href="${esc(r.url)}" target="_blank">已上传，查看报告</a>`; }
+      catch (e) { $("#runInfo").textContent += ` · 自动上传失败：${e.message}（可在本地记录里重试）`; }
+    }
+  },
+  async marker() {
+    const label = $("#markerText").value.trim() || "标记";
+    try { await api("/api/run/marker", {method: "POST", body: JSON.stringify({label})}); $("#markerText").value = ""; }
+    catch (e) { alert(e.message); }
+  },
+  async stop() {
+    if (!confirm("结束本次测试？数据已实时保存在本地。")) return;
+    try { await api("/api/run/stop", {method: "POST"}); this.poll(); } catch (e) { alert(e.message); }
+  },
+};
+
+/* ---------- history ---------- */
+const histPager = {page: 1, size: 20};
+try { histPager.size = +localStorage.getItem("perfscope.pageSize") || 20; } catch {}
+async function loadHistory() {
+  const all = await api("/api/sessions").catch(() => []);
+  const pages = Math.max(1, Math.ceil(all.length / histPager.size));
+  histPager.page = Math.min(Math.max(1, histPager.page), pages);
+  const list = all.slice((histPager.page - 1) * histPager.size, histPager.page * histPager.size);
+  const body = $("#historyBody");
+  if (!all.length) { body.innerHTML = `<div class="empty"><b>本地还没有测试记录</b>完成一次测试后会出现在这里，可以上传到服务器和团队共享。</div>`; return; }
+  const status = {running: "进行中", finished: "已完成", interrupted: "意外中断"};
+  cmpSel = cmpSel.filter(id => all.some(s => s.id === id && s.status !== "running"));
+  body.innerHTML = `<div class="cmpbar" id="cmpBar" hidden><span id="cmpInfo"></span>
+      <button class="btn primary" id="cmpGo">对比所选</button><button class="btn ghost" id="cmpClear">清除选择</button></div>
+    <table><thead><tr><th class="pick"><span class="info" tabindex="0" role="img" aria-label="说明：勾选两条或以上进行对比，先勾选的作为参照" data-tip="勾选两条或以上进行对比，先勾选的作为参照">?</span></th><th>名称</th><th>应用</th><th>开始时间</th><th>时长</th><th>状态</th><th>服务器</th><th></th></tr></thead><tbody>${
+    list.map(s => `<tr>
+      <td class="pick">${s.status !== "running" ? `<input type="checkbox" class="cmpPick" data-id="${esc(s.id)}" aria-label="选择「${esc(s.name)}」进行对比" ${cmpSel.includes(s.id) ? "checked" : ""}>` : ""}</td>
+      <td>${esc(s.name)}<div class="sub2">
+        <button class="sid" data-act="copy" data-id="${esc(s.id)}" data-tip="${esc(s.id)}\n点击复制完整 ID" aria-label="复制记录 ID ${esc(s.id)}">#${esc(s.id.slice(0, 8))}${COPY_ICON}</button>
+        ${s.project && s.project !== "default" ? `<span>${esc(s.project)}</span>` : ""}${(s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div></td>
+      <td>${esc(s.app_package)}<div class="sub2">${esc([s.app_version, s.config?.env].filter(Boolean).join(" · "))}</div></td>
+      <td>${fmtDate(s.started_at)} <span class="muted">(${tzName(s.started_at)})</span><div class="sub2">${fmtUtc(s.started_at)}</div></td>
+      <td>${s.ended_at ? fmtDur((s.ended_at - s.started_at) / 1000) : "-"}</td>
+      <td>${status[s.status] || s.status}</td>
+      <td>${s.remote_id ? (settings.server_url ? `<a target="_blank" href="${esc(settings.server_url.replace(/\/$/, ""))}/#/s/${esc(s.remote_id)}">已上传</a>` : "已上传") : "未上传"}</td>
+      <td style="white-space:nowrap">
+        <button class="btn ghost" data-act="view" data-id="${s.id}">查看</button>
+        ${s.status !== "running" ? `<button class="btn ghost" data-act="upload" data-id="${s.id}">${s.remote_id ? "重新上传" : "上传"}</button>
+        <button class="btn ghost" data-act="del" data-id="${s.id}" style="color:var(--bad)">删除</button>` : ""}
+      </td></tr>`).join("")}</tbody></table>${pagerHtml(all.length, pages)}<div class="msg" id="histMsg"></div>`;
+  renderCmpBar();
+}
+let histCharts = null;
+// page numbers with gaps: 1 … 4 5 [6] 7 8 … 20
+function pagerHtml(total, pages) {
+  const cur = histPager.page, nums = [];
+  for (let p = 1; p <= pages; p++)
+    if (p === 1 || p === pages || Math.abs(p - cur) <= 2) nums.push(p);
+    else if (nums[nums.length - 1] !== "…") nums.push("…");
+  return `<nav class="pager" aria-label="分页">
+    <span class="muted">共 ${total} 条</span>
+    <span class="grow"></span>
+    <button class="btn ghost" data-page="${cur - 1}" ${cur <= 1 ? "disabled" : ""} aria-label="上一页">‹ 上一页</button>
+    ${nums.map(p => p === "…" ? `<span class="muted">…</span>`
+      : `<button class="btn ghost pg ${p === cur ? "on" : ""}" data-page="${p}" ${p === cur ? 'aria-current="page"' : ""}>${p}</button>`).join("")}
+    <button class="btn ghost" data-page="${cur + 1}" ${cur >= pages ? "disabled" : ""} aria-label="下一页">下一页 ›</button>
+    <label class="muted">每页<select id="pageSize" aria-label="每页条数">${[20, 50, 100].map(n =>
+      `<option ${n === histPager.size ? "selected" : ""}>${n}</option>`).join("")}</select>条</label>
+  </nav>`;
+}
+$("#historyBody").addEventListener("click", e => {
+  const b = e.target.closest("[data-page]"); if (!b || b.disabled) return;
+  histPager.page = +b.dataset.page; loadHistory().then(() => $("main").scrollTop = 0);
+});
+$("#historyBody").addEventListener("change", e => {
+  if (e.target.id !== "pageSize") return;
+  histPager.size = +e.target.value; histPager.page = 1;
+  try { localStorage.setItem("perfscope.pageSize", histPager.size); } catch {}
+  loadHistory();
+});
+
+/* ---------- record / compare pages: replace the list instead of piling up under it ---------- */
+const histPage = {open: false, scroll: 0};
+const pageHead = (title, extra = "") => `<div class="pagebar"><button class="btn ghost" data-back>← 返回本地记录</button></div>
+  <div class="dhead"><h2>${esc(title)}</h2>${extra}</div>`;
+function showPage() {
+  if (!histPage.open) histPage.scroll = $("main").scrollTop;   // come back to the same spot in the list
+  histPage.open = true;
+  $("#historyBody").hidden = true; $("#histView").hidden = false; $("#histView").innerHTML = `<p class="muted">加载中…</p>`;
+  $("main").scrollTop = 0;
+}
+function closePage() {
+  charts.forEach(c => c.dispose()); charts = [];
+  histCharts?.dispose(); histCharts = null;
+  $("#histView").innerHTML = ""; $("#histView").hidden = true; $("#historyBody").hidden = false;
+  if (histPage.open) $("main").scrollTop = histPage.scroll;
+  histPage.open = false;
+}
+async function openPage(state, push, render) {
+  if (push) history.pushState({hist: state}, "");
+  showPage();
+  try { await render(); }
+  catch (err) { closePage(); setMsg("histMsg", err.message, "err"); }
+}
+const openRecord = (id, push = true) => openPage({view: "record", id}, push, () => viewRecord(id));
+const openCompare = (ids, push = true) => openPage({view: "compare", ids}, push, () => viewCompare(ids));
+window.addEventListener("popstate", e => {
+  const h = e.state?.hist;
+  if (!h) { if (histPage.open) closePage(); return; }
+  if ($("#tab-history").hidden) switchTab("history");
+  h.view === "record" ? openRecord(h.id, false) : openCompare(h.ids, false);
+});
+$("#histView").addEventListener("click", async e => {
+  if (e.target.closest("[data-back]")) { history.state?.hist ? history.back() : closePage(); return; }
+  const b = e.target.closest('button[data-act="diag"]');
+  if (b) { await copyText($("#histView").dataset.diag); b.dataset.tip = "已复制排查信息"; showTip(b); }
+});
+
+// one row per page: how often it was opened and how long it took
+function pageTable(points) {
+  const by = {};
+  for (const [ts, m, v] of points) if (m.startsWith("page.")) (by[m] ||= []).push([ts, v]);
+  const keys = Object.keys(by);
+  if (!keys.length) return "";
+  const rows = keys.map(k => ({name: k.slice(5), st: sliceStats(by[k])})).sort((a, b) => b.st.avg - a.st.avg);
+  return `<h3 class="cmph" style="font-size:14px;margin:18px 0 8px">页面加载时长 <span class="info" tabindex="0" role="img"
+      aria-label="说明：Android 自动读取系统记录的页面（Activity）打开耗时；App 打 PERF_PAGE|页面名|耗时 日志时按页面名统计，Android 和 iOS 通用。按平均耗时从慢到快排列。"
+      data-tip="Android 自动读取系统记录的页面（Activity）打开耗时；App 打 PERF_PAGE|页面名|耗时 日志时按页面名统计，Android 和 iOS 通用。按平均耗时从慢到快排列。">?</span></h3>
+    <table class="pagetbl"><thead><tr><th>页面</th><th class="num">打开次数</th><th class="num">平均 (ms)</th><th class="num">P90 (ms)</th><th class="num">最慢 (ms)</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.st.count}</td><td class="num">${Math.round(r.st.avg)}</td>
+      <td class="num">${Math.round(r.st.p90)}</td><td class="num">${Math.round(r.st.max)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+async function viewRecord(id) {
+  const s = await api(`/api/sessions/${id}`);
+  charts.forEach(c => c.dispose()); charts = [];
+  Object.assign(META, s.metric_meta);
+  const diag = diagText(s);
+  $("#histView").innerHTML = pageHead(s.name, `<button class="btn" data-act="diag" data-tip="复制记录 ID、设备、系统、应用版本、环境、时间等，可直接贴到 bug 单">${COPY_ICON} 复制排查信息</button>`) + `
+    <dl class="facts">${diag.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>
+    ${pageTable(s.points)}
+    <div id="histShots"></div><div class="charts" id="histCharts"></div>
+    <h3 class="cmph" style="font-size:14px;margin:18px 0 8px">事件</h3>
+    <div class="events" id="recEvents">${s.events.length ? s.events.slice().reverse().map(([ts, t, label]) => { const [name, cls] = EVT[t] || [t, ""];
+      return `<div class="ev"><span class="t">${fmtTime(ts)}</span><span><span class="tag ${cls}">${esc(name)}</span></span><span>${esc(label)}${logButton(s.attachments, ts, t)}</span></div>`; }).join("")
+      : `<div class="ev" style="display:block;color:var(--muted)">本次测试没有事件</div>`}</div>`;
+  $("#recEvents").addEventListener("click", e => {
+    const b = e.target.closest("[data-logts]"); if (b) showLog(logFor(s.attachments, +b.dataset.logts));
+  });
+  $("#histView").dataset.diag = diag.text;
+  histCharts?.dispose(); histCharts = new ChartSet($("#histCharts"));
+  const viewer = new ShotViewer($("#histShots"), ts => `/api/sessions/${id}/shots/${ts}`, false);
+  viewer.add(s.shots || []); linkShots(histCharts, viewer);
+  histCharts.addPoints(s.points); histCharts.addEvents(s.events);
+}
+let cmpSel = [];   // ids in the order they were ticked; the first is the reference
+function renderCmpBar() {
+  const bar = $("#cmpBar"); if (!bar) return;
+  bar.hidden = !cmpSel.length;
+  $("#cmpInfo").textContent = cmpSel.length < 2 ? `已选 ${cmpSel.length} 条，再选至少 1 条` : `已选 ${cmpSel.length} 条，先选的作为参照`;
+  $("#cmpGo").disabled = cmpSel.length < 2;
+}
+$("#historyBody").addEventListener("change", e => {
+  const c = e.target.closest(".cmpPick"); if (!c) return;
+  cmpSel = c.checked ? [...cmpSel.filter(x => x !== c.dataset.id), c.dataset.id] : cmpSel.filter(x => x !== c.dataset.id);
+  renderCmpBar();
+});
+$("#historyBody").addEventListener("click", async e => {
+  if (e.target.closest("#cmpClear")) { cmpSel = []; document.querySelectorAll(".cmpPick").forEach(c => c.checked = false); renderCmpBar(); }
+  else if (e.target.closest("#cmpGo")) {
+    await openCompare([...cmpSel]);
+  }
+});
+// everything we know that helps reproduce a problem, as rows for the page and as text for a bug report
+function diagText(s) {
+  const d = s.device || {}, cfg = s.config || {};
+  const when = ts => ts ? `${fmtDate(ts)} (${tzName(ts)}) / ${fmtUtc(ts, true)}` : "-";
+  const pf = {android: "Android", ios: "iOS"}[d.platform] || d.platform || "";
+  const rows = [
+    ["记录 ID", s.id],
+    ["应用", `${s.app_package} ${s.app_version || ""}`.trim()],
+    ["环境", cfg.env || "-"],
+    ["设备", [d.brand, d.model, d.name && `(${d.name})`].filter(Boolean).join(" ") || "-"],
+    ["设备序列号", d.serial || "-"],
+    ["系统", `${pf} ${d.os_version || ""}${d.sdk ? ` (SDK ${d.sdk})` : d.build ? ` (${d.build})` : ""}`.trim()],
+    ["开始", when(s.started_at)],
+    ["结束", when(s.ended_at)],
+    ["项目 / 标签", [s.project, ...(s.tags || [])].join(" / ")],
+    ["服务器", s.remote_id && settings.server_url ? `${settings.server_url.replace(/\/$/, "")}/#/s/${s.remote_id}` : "未上传"],
+  ];
+  return {rows, text: [`PerfScope 测试：${s.name}`, ...rows.map(([k, v]) => `${k}：${v}`)].join("\n")};
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return; } catch {}
+  // clipboard API needs a secure context; 127.0.0.1 usually qualifies, this is the fallback
+  const t = Object.assign(document.createElement("textarea"), {value: text});
+  t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select();
+  document.execCommand("copy"); t.remove();
+}
+$("#historyBody").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const id = b.dataset.id;
+  try {
+    if (b.dataset.act === "copy") {
+      await copyText(id);
+      b.dataset.tip = `已复制\n${id}`; showTip(b);
+      setTimeout(() => { b.dataset.tip = `${id}\n点击复制完整 ID`; }, 1500);
+    } else if (b.dataset.act === "upload") {
+      b.disabled = true; setMsg("histMsg", "上传中…");
+      await api(`/api/sessions/${id}/upload`, {method: "POST"}); setMsg("histMsg", "上传完成", "ok"); loadHistory();
+    } else if (b.dataset.act === "del") {
+      if (!confirm("删除这条本地记录？已上传到服务器的数据不受影响。")) return;
+      await api(`/api/sessions/${id}`, {method: "DELETE"}); loadHistory();
+    } else if (b.dataset.act === "view") {
+      await openRecord(id);
+    }
+  } catch (err) { setMsg("histMsg", err.message, "err"); b.disabled = false; }
+});
+
+/* ---------- local compare: pick a time range per run, compare that slice ---------- */
+// Each run gets its own time range (seconds from its start). Stats and overlays use only that slice,
+// so "A 5:00-15:00" can be compared with "B 3:00-13:00", or both from the same marker.
+const cmpState = {stat: "avg", threshold: 10, refMetric: null};
+const fmtClock = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return (h ? `${h}:${String(m).padStart(2, "0")}` : String(m).padStart(2, "0")) + ":" + String(x).padStart(2, "0"); };
+// "5:30", "1:05:30", "330" (seconds) -> seconds; null when unreadable
+const parseClock = t => { const p = String(t).trim().replace(/：/g, ":").split(":");
+  if (!p.length || p.some(x => x === "" || isNaN(+x))) return null; return p.reduce((a, b) => a * 60 + +b, 0); };
+
+// same statistics as the server computes at upload (server/perfserver/stats.py), for any slice
+function sliceStats(rows) {
+  if (!rows.length) return null;
+  const vals = rows.map(r => r[1]), s = [...vals].sort((a, b) => a - b), n = vals.length;
+  const pct = q => { const k = (n - 1) * q, lo = Math.floor(k), hi = Math.min(lo + 1, n - 1); return s[lo] + (s[hi] - s[lo]) * (k - lo); };
+  let slope = null;
+  if (n >= 3 && rows[n - 1][0] - rows[0][0] >= 5 * 60 * 1000) {
+    const xs = rows.map(r => (r[0] - rows[0][0]) / 3600000), mx = xs.reduce((a, b) => a + b) / n, my = vals.reduce((a, b) => a + b) / n;
+    const den = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+    if (den) slope = xs.reduce((a, x, i) => a + (x - mx) * (vals[i] - my), 0) / den;
+  }
+  return {count: n, avg: vals.reduce((a, b) => a + b) / n, min: s[0], max: s[n - 1], p50: pct(.5), p90: pct(.9), p99: pct(.99), slope_per_hour: slope};
+}
+
+const STAT_NAMES = {avg: "平均", p50: "P50", p90: "P90", p99: "P99", max: "最大", min: "最小", slope_per_hour: "每小时变化"};
+const PALETTE = ["#1E5BD8", "#C2352B", "#17805A", "#B7791F", "#6B4FBB", "#0E7C86"];
+const num = v => v == null ? "-" : (Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 100) / 100);
+const groupPoints = points => { const by = {}; for (const [ts, m, v] of points) (by[m] ||= []).push([ts, v]); return by; };
+let charts = [];   // compare-view charts, disposed when the view is rebuilt
+function chartBox(container, meta) {
+  const box = document.createElement("div"); box.className = "chart";
+  box.innerHTML = `<h3>${esc(meta.label)}${meta.unit ? ` <span style="color:var(--muted)">(${esc(meta.unit)})</span>` : ""}</h3><div class="c"></div>`;
+  container.appendChild(box); return box.querySelector(".c");
+}
+function lineChart(el, meta, series) {
+  const c = echarts.init(el); charts.push(c);
+  c.setOption({
+    color: PALETTE, animation: false,
+    legend: series.length > 1 ? {top: 0, right: 0, textStyle: {fontSize: 11}} : undefined,
+    grid: {left: 46, right: 12, top: series.length > 1 ? 26 : 14, bottom: 26},
+    tooltip: {trigger: "axis", valueFormatter: v => v == null ? "-" : `${num(v)} ${meta.unit || ""}`},
+    xAxis: {type: "value", axisLabel: {color: "#5E6C79", fontSize: 11, formatter: "{value} 分", hideOverlap: true}, axisLine: {lineStyle: {color: "#D9DFE4"}}},
+    yAxis: {type: "value", scale: true, min: meta.min, max: meta.max, axisLabel: {color: "#5E6C79", fontSize: 11}, splitLine: {lineStyle: {color: "#EEF1F3"}}},
+    series: series.map(s => ({type: "line", name: s.name, data: s.data, showSymbol: s.data.length < 60, symbolSize: 4, sampling: "lttb", lineStyle: {width: 1.6}})),
+  });
+  return c;
+}
+window.addEventListener("resize", () => charts.forEach(c => c.resize()));
+
+async function viewCompare(ids) {
+  charts.forEach(c => c.dispose()); charts = [];
+  const sessions = await Promise.all(ids.map(id => api(`/api/sessions/${id}`)));
+  const metaAll = Object.assign({}, ...sessions.map(s => s.metric_meta).reverse());   // reference's meta wins
+  Object.assign(META, metaAll);
+  const env = [["设备", s => [s.device?.brand, s.device?.model].filter(Boolean).join(" ")], ["系统版本", s => s.device?.os_version],
+               ["应用", s => s.app_package], ["环境", s => s.config?.env || ""]];
+  const d = {
+    sessions: sessions.map(s => ({...s, ended_at: s.ended_at || (s.points.length ? s.points[s.points.length - 1][0] : s.started_at + 1000)})),
+    metrics: [...new Set(sessions.flatMap(s => s.points.map(p => p[1])))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)),
+    metric_meta: Object.fromEntries(Object.keys(metaAll).map(k => [k, metaOf(k)])),
+    warnings: env.map(([name, f]) => { const v = new Set(sessions.map(f)); return v.size > 1 ? `${name}不一致：${[...v].map(x => x || "未填").join(" / ")}` : null; }).filter(Boolean),
+  };
+  d.metrics.forEach(m => d.metric_meta[m] ||= metaOf(m));
+  const grouped = d.sessions.map(s => groupPoints(s.points));
+  Object.values(grouped).forEach(g => Object.values(g).forEach(rows => rows.sort((a, b) => a[0] - b[0])));
+  const ref = d.sessions[0];
+  const label = (s, i) => `${i === 0 ? "参照 · " : ""}${s.name}`;
+  const lengthOf = s => Math.max(1, Math.round((s.ended_at - s.started_at) / 1000));
+  const ranges = d.sessions.map(s => ({from: 0, to: lengthOf(s)}));
+  if (!cmpState.refMetric || !d.metrics.includes(cmpState.refMetric)) cmpState.refMetric = d.metrics.find(m => m.startsWith("mem")) || d.metrics[0];
+  const marks = d.sessions.map(s => (s.events || []).filter(e => e[1] !== "error")
+    .map(([ts, t, lab]) => ({sec: Math.round((ts - s.started_at) / 1000), text: `${(EVT[t] || [t])[0]}：${lab}`})));
+
+  $("#histView").innerHTML = pageHead(`对比 ${d.sessions.length} 次测试`) + `<div class="cmpview">
+    <p class="muted" style="margin:0">以「${esc(ref.name)}」为参照。每次测试可以单独选时间范围，统计和曲线只按选中的那一段计算；差异超过阈值且方向变差的标红，变好的标绿。</p>
+    ${d.warnings.length ? `<div class="warn">测试环境不一致，请确认数据是否可比：<br>${d.warnings.map(esc).join("<br>")}</div>` : ""}
+    <h3 class="cmph">时间范围</h3>
+    <div class="filters">
+      <label>范围选择参考曲线<select id="cRefM">${d.metrics.map(m => `<option value="${esc(m)}" ${m === cmpState.refMetric ? "selected" : ""}>${esc(d.metric_meta[m].label)}</option>`).join("")}</select></label>
+      <button class="btn" id="cSameLen" data-tip="其他测试保持各自的开始时间，结束时间按参照的时长截取，让每段一样长">统一为参照的时长</button>
+      <button class="btn" id="cAllFull">全部恢复全程</button>
+    </div>
+    <div class="rngs">${d.sessions.map((s, i) => `
+      <div class="rng" data-i="${i}">
+        <div class="rng-h"><b class="trunc">${esc(label(s, i))}</b><span class="small muted">${esc(s.app_version || "")} · ${fmtDate(s.started_at)} · 全长 ${fmtClock(lengthOf(s))}</span></div>
+        <div class="rng-c"></div>
+        <div class="rng-f">
+          <label>开始<input type="text" class="rs" inputmode="numeric" aria-label="开始时间（距测试开始）"></label>
+          <label>结束<input type="text" class="re" inputmode="numeric" aria-label="结束时间（距测试开始）"></label>
+          <label ${marks[i].length ? "" : `class="nomark" data-tip="这次测试没有打标记。下次测试时，在实时页上方输入「开始录音」等内容并点「打标记」，之后就能在这里按标记选范围。"`}>从标记开始<span class="info" tabindex="0" role="img" aria-label="说明：把范围的开始设为某个标记的时刻。标记是测试中点「打标记」记下的，如「开始录音」；告警、App 重启等事件也会列在这里。" data-tip="把范围的开始设为某个标记的时刻。标记是测试中点「打标记」记下的，如「开始录音」；告警、App 重启等事件也会列在这里。">?</span><select class="ms" ${marks[i].length ? "" : `disabled`}><option value="">${marks[i].length ? "选择开始标记…" : "本次没有标记"}</option>${marks[i].map(m => `<option value="${m.sec}">${fmtClock(m.sec)}　${esc(m.text)}</option>`).join("")}</select></label>
+          <label ${marks[i].length ? "" : `class="nomark" data-tip="这次测试没有打标记。下次测试时，在实时页上方输入「开始录音」等内容并点「打标记」，之后就能在这里按标记选范围。"`}>到标记结束<span class="info" tabindex="0" role="img" aria-label="说明：把范围的结束设为某个标记的时刻，如「停止录音」。和「从标记开始」配合，可以精确比较两次测试中同一段操作。" data-tip="把范围的结束设为某个标记的时刻，如「停止录音」。和「从标记开始」配合，可以精确比较两次测试中同一段操作。">?</span><select class="me" ${marks[i].length ? "" : `disabled`}><option value="">${marks[i].length ? "选择结束标记…" : "本次没有标记"}</option>${marks[i].map(m => `<option value="${m.sec}">${fmtClock(m.sec)}　${esc(m.text)}</option>`).join("")}</select></label>
+          <label>时长<input type="text" class="rd" inputmode="numeric" aria-label="时长，结束时间 = 开始 + 时长"
+            data-tip="填好后按回车或点击空白处，结束时间自动设为「开始 + 时长」"></label>
+          <div class="rpre" role="group" aria-label="常用时长">${[[30, "30 秒"], [60, "1 分"], [300, "5 分"], [600, "10 分"]]
+            .map(([sec, t]) => `<button type="button" class="chip" data-sec="${sec}">${t}</button>`).join("")}${i
+            ? `<button type="button" class="chip" data-sec="ref" data-tip="和参照选中的时长一样">同参照</button>` : ""}</div>
+          <button class="btn ghost rfull">全程</button>
+        </div>
+      </div>`).join("")}</div>
+    <p class="small muted" style="margin:6px 0 0">拖动小图下方滑块两端选择范围，或直接输入「分:秒」，如 5:00；选好开始后，点常用时长或填写时长，结束时间会自动填上。</p>
+    <h3 class="cmph">指标对比</h3>
+    <div class="filters">
+      <label>比较统计值<select id="cStat">${Object.entries(STAT_NAMES).filter(([k]) => k !== "min").map(([k, v]) => `<option value="${k}" ${k === cmpState.stat ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>差异阈值（%）<input type="number" id="cThr" value="${cmpState.threshold}" min="0" step="1" style="min-width:90px"></label>
+    </div>
+    <div class="wrap" id="cTable"></div>
+    <h3 class="cmph">曲线叠加 <span class="small muted" style="font-weight:400">横轴为各自所选范围开始后的分钟数</span></h3>
+    <div class="charts" id="cmpCharts"></div></div>`;
+
+  const inRange = (i, m) => {
+    const s = d.sessions[i], r = ranges[i], a = s.started_at + r.from * 1000, b = s.started_at + r.to * 1000;
+    return (grouped[i][m] || []).filter(([ts]) => ts >= a && ts <= b);
+  };
+
+  const renderTable = () => {
+    const k = cmpState.stat, thr = cmpState.threshold;
+    const stats = d.sessions.map((s, i) => Object.fromEntries(d.metrics.map(m => [m, sliceStats(inRange(i, m))])));
+    $("#cTable").innerHTML = `<table><thead><tr><th>指标</th>${d.sessions.map((s, i) => `<th class="num">${esc(label(s, i))}<div class="small muted" style="font-weight:400">${esc(s.app_version)} · ${fmtClock(ranges[i].from)}–${fmtClock(ranges[i].to)}</div></th>`).join("")}</tr></thead><tbody>${
+      d.metrics.map(m => { const mm = d.metric_meta[m], base = stats[0][m]?.[k];
+        return `<tr><td>${esc(mm.label)} <span class="muted small">${esc(mm.unit)}</span></td>${d.sessions.map((s, i) => {
+          const v = stats[i][m]?.[k];
+          if (v == null) return `<td class="num muted" ${k === "slope_per_hour" ? `data-tip="所选范围不足 5 分钟，算不出每小时变化"` : ""}>-</td>`;
+          if (i === 0 || base == null || base === 0) return `<td class="num">${num(v)}</td>`;
+          const pct = (v - base) / Math.abs(base) * 100, worse = mm.better === "higher" ? pct < 0 : pct > 0;
+          const cls = Math.abs(pct) >= thr ? (worse ? "bad" : "good") : "muted";
+          return `<td class="num">${num(v)} <span class="small ${cls}">${pct > 0 ? "+" : ""}${pct.toFixed(1)}%</span></td>`; }).join("")}</tr>`; }).join("")}</tbody></table>`;
+  };
+
+  let overlay = [];
+  const renderOverlay = () => {
+    overlay.forEach(c => { c.dispose(); charts = charts.filter(x => x !== c); });
+    overlay = []; $("#cmpCharts").innerHTML = "";
+    d.metrics.forEach(m => {
+      const series = d.sessions.map((s, i) => ({name: label(s, i),
+        data: inRange(i, m).map(([ts, v]) => [Math.round((ts - s.started_at - ranges[i].from * 1000) / 600) / 100, v])}));
+      overlay.push(lineChart(chartBox($("#cmpCharts"), d.metric_meta[m]), d.metric_meta[m], series));
+    });
+  };
+
+  let pending = null;
+  const refresh = () => { clearTimeout(pending); pending = setTimeout(() => { renderTable(); renderOverlay(); }, 120); };
+
+  // mini chart per run with a slider: dragging its handles picks the range
+  const minis = [];
+  const syncInputs = i => {
+    const box = document.querySelector(`.rng[data-i="${i}"]`), r = ranges[i];
+    if (document.activeElement !== box.querySelector(".rs")) box.querySelector(".rs").value = fmtClock(r.from);
+    if (document.activeElement !== box.querySelector(".re")) box.querySelector(".re").value = fmtClock(r.to);
+    const rd = box.querySelector(".rd");
+    if (document.activeElement !== rd) { rd.value = fmtClock(r.to - r.from); rd.classList.remove("badin"); }
+    // highlight the preset that matches the current length
+    box.querySelectorAll(".chip").forEach(c => c.classList.toggle("on",
+      (c.dataset.sec === "ref" ? ranges[0].to - ranges[0].from : +c.dataset.sec) === r.to - r.from));
+  };
+  const setRange = (i, from, to, fromSlider) => {
+    const len = lengthOf(d.sessions[i]);
+    from = Math.max(0, Math.min(from, len)); to = Math.max(0, Math.min(to, len));
+    if (to - from < 1) return false;
+    ranges[i] = {from: Math.round(from), to: Math.round(to)};
+    if (!fromSlider) minis[i]?.dispatchAction({type: "dataZoom", startValue: ranges[i].from, endValue: ranges[i].to});
+    minis[i]?.setOption({series: [{markArea: {data: [[{xAxis: ranges[i].from}, {xAxis: ranges[i].to}]]}}]});
+    syncInputs(i);
+    if (i === 0) d.sessions.forEach((_, k) => k && syncInputs(k));
+    refresh(); return true;
+  };
+  const drawMinis = () => {
+    minis.forEach(c => { c.dispose(); charts = charts.filter(x => x !== c); }); minis.length = 0;
+    const m = cmpState.refMetric, meta = d.metric_meta[m];
+    d.sessions.forEach((s, i) => {
+      const c = echarts.init(document.querySelector(`.rng[data-i="${i}"] .rng-c`)); charts.push(c); minis[i] = c;
+      c.setOption({
+        animation: false, grid: {left: 46, right: 16, top: 6, bottom: 44},
+        tooltip: {trigger: "axis", formatter: p => `${fmtClock(p[0].value[0])}<br>${esc(meta.label)}：${num(p[0].value[1])} ${esc(meta.unit || "")}`},
+        xAxis: [{type: "value", min: 0, max: lengthOf(s), axisLabel: {color: "#5E6C79", fontSize: 10, formatter: v => fmtClock(v), hideOverlap: true}, splitLine: {show: false}},
+                {type: "value", min: 0, max: lengthOf(s), show: false}],
+        yAxis: {type: "value", scale: true, splitNumber: 2, min: meta.min, max: meta.max, axisLabel: {color: "#5E6C79", fontSize: 10}, splitLine: {lineStyle: {color: "#EEF1F3"}}},
+        dataZoom: [{type: "slider", xAxisIndex: 1, filterMode: "none", startValue: ranges[i].from, endValue: ranges[i].to,
+          height: 18, bottom: 6, brushSelect: false, labelFormatter: v => fmtClock(v),
+          borderColor: "#D9DFE4", fillerColor: "rgba(30,91,216,.15)", handleStyle: {color: "#1E5BD8"}, moveHandleSize: 6}],
+        series: [{type: "line", showSymbol: false, data: (grouped[i][m] || []).map(([ts, v]) => [(ts - s.started_at) / 1000, v]),
+          lineStyle: {width: 1.2, color: i === 0 ? "#1E5BD8" : PALETTE[i % PALETTE.length]},
+          markArea: {silent: true, itemStyle: {color: "rgba(30,91,216,.08)"}, data: [[{xAxis: ranges[i].from}, {xAxis: ranges[i].to}]]},
+          markLine: marks[i].length ? {symbol: "none", silent: true, label: {show: false},
+            lineStyle: {color: "#B7791F", type: "dashed", width: 1}, data: marks[i].map(mk => ({xAxis: mk.sec}))} : undefined}],
+      });
+      c.on("datazoom", () => {
+        const z = c.getOption().dataZoom[0];
+        setRange(i, z.startValue, z.endValue, true);
+      });
+    });
+  };
+
+  document.querySelectorAll(".rng").forEach(box => {
+    const i = +box.dataset.i;
+    const commit = () => {
+      const a = parseClock(box.querySelector(".rs").value), b = parseClock(box.querySelector(".re").value);
+      const ok = a != null && b != null && setRange(i, a, b);
+      box.querySelectorAll(".rs, .re").forEach(x => x.classList.toggle("badin", !ok));
+      if (ok) syncInputs(i);
+    };
+    box.querySelectorAll(".rs, .re").forEach(inp => {
+      inp.addEventListener("keydown", e => { if (e.key === "Enter") { commit(); inp.blur(); } });
+      inp.addEventListener("change", commit);
+      inp.addEventListener("blur", () => { inp.classList.remove("badin"); syncInputs(i); });
+    });
+    box.querySelector(".ms").onchange = e => { if (e.target.value !== "") setRange(i, +e.target.value, Math.max(ranges[i].to, +e.target.value + 1)); e.target.value = ""; };
+    box.querySelector(".me").onchange = e => { if (e.target.value !== "") setRange(i, Math.min(ranges[i].from, +e.target.value - 1), +e.target.value); e.target.value = ""; };
+    box.querySelector(".rfull").onclick = () => setRange(i, 0, lengthOf(d.sessions[i]));
+    // duration: end = start + duration, kept inside the run
+    const applyLen = sec => {
+      const len = lengthOf(d.sessions[i]);
+      let from = ranges[i].from;
+      if (from + sec > len) from = Math.max(0, len - sec);   // too close to the end: slide the start back
+      return setRange(i, from, Math.min(len, from + sec));
+    };
+    const rd = box.querySelector(".rd");
+    const commitLen = () => {
+      const sec = parseClock(rd.value);
+      const ok = sec != null && sec >= 1 && applyLen(sec);
+      rd.classList.toggle("badin", !ok);
+      if (!ok) setTimeout(() => syncInputs(i), 900);   // show the error briefly, then restore
+    };
+    rd.addEventListener("keydown", e => { if (e.key === "Enter") rd.blur(); else if (e.key === "Escape") { syncInputs(i); rd.value = fmtClock(ranges[i].to - ranges[i].from); rd.blur(); } });
+    rd.addEventListener("change", commitLen);
+    box.querySelector(".rpre").addEventListener("click", e => {
+      const c = e.target.closest(".chip"); if (!c) return;
+      applyLen(c.dataset.sec === "ref" ? ranges[0].to - ranges[0].from : +c.dataset.sec);
+    });
+  });
+  $("#cSameLen").onclick = () => {
+    const len = ranges[0].to - ranges[0].from;
+    d.sessions.forEach((s, i) => { if (i) setRange(i, ranges[i].from, Math.min(ranges[i].from + len, lengthOf(s))); });
+  };
+  $("#cAllFull").onclick = () => d.sessions.forEach((s, i) => setRange(i, 0, lengthOf(s)));
+  $("#cRefM").onchange = e => { cmpState.refMetric = e.target.value; drawMinis(); };
+  $("#cStat").onchange = e => { cmpState.stat = e.target.value; renderTable(); };
+  $("#cThr").oninput = e => { cmpState.threshold = parseFloat(e.target.value) || 0; renderTable(); };
+
+  drawMinis();
+  d.sessions.forEach((s, i) => syncInputs(i));
+  renderTable(); renderOverlay();
+}
+
+/* ---------- plugins ---------- */
+async function loadPlugins() {
+  const d = await api("/api/plugins");
+  const kinds = [["collectors", "采集器", "每个采样周期产出指标"], ["sources", "数据源", "持续推送业务指标或事件"],
+                 ["hooks", "钩子", "测试开始或结束时执行"], ["platforms", "平台", "设备连接方式"]];
+  const origin = o => o === "builtin" ? "内置" : esc(o.split(/[\\/]/).pop());
+  $("#pluginsBody").innerHTML = (d.errors.length ? `<div class="empty" style="text-align:left;border-color:var(--bad);color:var(--bad);padding:16px;margin-bottom:16px">
+      <b style="color:var(--bad)">有 ${d.errors.length} 个插件加载失败，其他功能不受影响</b>${d.errors.map(e => `<div style="margin-top:8px"><code>${esc(e.origin)}</code><pre style="white-space:pre-wrap;font-size:12px;margin:4px 0 0">${esc(e.error)}</pre></div>`).join("")}</div>` : "")
+    + kinds.map(([k, title, desc]) => `<h2 style="margin-top:4px">${title} <span style="font-weight:400;font-size:12px;color:var(--muted)">${desc}</span></h2>
+      ${d[k].length ? `<table style="margin-bottom:22px"><thead><tr><th>名称</th><th>提供的指标</th><th>来源</th></tr></thead><tbody>${
+        d[k].map(p => `<tr><td>${esc(p.name)}</td><td>${p.metrics.length ? p.metrics.map(m => `<span class="tag">${esc(metaOf(m).label)}</span>`).join(" ") : '<span style="color:var(--muted)">-</span>'}</td><td>${origin(p.origin)}</td></tr>`).join("")}</tbody></table>`
+        : `<p style="color:var(--muted);margin:0 0 22px">未安装</p>`}`).join("")
+    + `<p style="color:var(--muted);font-size:13px">新增插件：把 .py 文件放到 client/plugins/ 或 ~/.perfscope/plugins/，重启客户端即可。写法见 PLUGINS.md。</p>`;
+}
+
+/* ---------- settings ---------- */
+async function loadSettings() { settings = await api("/api/settings").catch(() => ({})); }
+$("#settingsBtn").onclick = () => {
+  $("#sUrl").value = settings.server_url || ""; $("#sUser").value = settings.user || "";
+  $("#sToken").value = settings.token || ""; $("#sAuto").checked = !!settings.auto_upload;
+  $("#settings").showModal();
+};
+$("#sCancel").onclick = () => $("#settings").close();
+$("#sSave").onclick = async () => {
+  settings = await api("/api/settings", {method: "PUT", body: JSON.stringify({
+    server_url: $("#sUrl").value.trim(), user: $("#sUser").value.trim(),
+    token: $("#sToken").value.trim(), auto_upload: $("#sAuto").checked})});
+  $("#settings").close();
+};
+
+/* ---------- tabs & init ---------- */
+function switchTab(name) {
+  document.querySelectorAll(".tabs [data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
+  ["live", "history", "plugins"].forEach(t => $("#tab-" + t).hidden = name !== t);
+  if (name === "history") { if (histPage.open) { closePage(); if (history.state?.hist) history.replaceState(null, ""); } loadHistory(); }
+  if (name === "plugins") loadPlugins();
+  setTimeout(() => { live.charts?.resize(); histCharts?.resize(); }, 0);
+}
+document.querySelectorAll(".tabs [data-tab]").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+window.addEventListener("resize", () => { live.charts?.resize(); histCharts?.resize(); });
+$("#refreshDev").onclick = loadDevices;
+$("#startBtn").onclick = start;
+
+/* metrics differ per platform: rebuild the checkboxes when the platform changes */
+let shownPlatform = null;
+async function loadMetrics(platform) {
+  if (platform === shownPlatform) return;
+  const m = await api(`/api/metrics?platform=${encodeURIComponent(platform)}`);
+  shownPlatform = platform;
+  META = m.metrics;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("perfscope.form") || "{}"); } catch {}
+  const prev = saved.metrics ? saved.metrics.filter(k => k in META) : [];
+  const chosen = new Set(prev.length ? prev : m.default);
+  $("#metrics").innerHTML = Object.entries(META).map(([k, v]) =>
+    `<label ${METRIC_TIPS[k] ? `data-tip="${esc(METRIC_TIPS[k])}"` : ""}><input type="checkbox" value="${k}" ${chosen.has(k) ? "checked" : ""}>${esc(v.label)}</label>`).join("");
+  renderAlertRows();
+  updateSummaries();
+}
+async function onDeviceChange() {
+  const [platform] = $("#device").value.split("|");
+  if (platform) await loadMetrics(platform);
+  await loadApps();
+}
+
+(async function init() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("perfscope.form") || "{}"); } catch {}
+  await loadMetrics(saved.platform || "android");
+  if (saved.project) $("#project").value = saved.project;
+  if (saved.tags) $("#tags").value = saved.tags.join(", ");
+  if (saved.interval) $("#interval").value = saved.interval;
+  if (saved.env) $("#env").value = saved.env;
+  alertVals = saved.alertVals || {};
+  renderAlertRows();
+  if ("screenshots" in saved) $("#shotsOn").checked = !!saved.screenshots;
+  if (saved.launch) $("#launchOn").checked = true;
+  api("/api/plugins").then(p => { if (p.errors.length) setMsg("setupMsg", `${p.errors.length} 个插件加载失败，详情见「插件」页`, "err"); });
+  await loadSettings();
+  await loadDevices();
+  if (saved.package && apps.includes(saved.package)) setApp(saved.package);
+  updateSummaries();
+  live.render(); live.poll();
+})();
+</script>
+</body>
+</html>

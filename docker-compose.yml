@@ -1,0 +1,13 @@
+# 开发/试用：SQLite + 本地目录。生产请改 DATABASE_URL 指向公司的 MySQL/TiDB，并设置 S3_BUCKET。
+services:
+  perfscope-server:
+    build: ./server
+    ports: ["9000:9000"]
+    volumes: ["./data:/data"]
+    environment:
+      AUTH_MODE: none
+      # AUTH_MODE: token
+      # AUTH_TOKENS: "token-for-alice:alice,token-for-bob:bob"
+      # DATABASE_URL: mysql+pymysql://user:pass@tidb.internal:4000/perfscope
+      # S3_BUCKET: your-bucket
+      # S3_PREFIX: perfscope

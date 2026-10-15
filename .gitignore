@@ -1,0 +1,11 @@
+.venv/
+data/
+__pycache__/
+*.db
+server/blobs/
+.pytest_cache/
+dist/
+*.log
+.DS_Store
+# per-machine team server address (written into downloaded client packages)
+server.txt
