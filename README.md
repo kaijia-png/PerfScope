@@ -23,7 +23,8 @@ tests/                       单元测试，包括插件机制的端到端测试
 | 系统 | 连接真实手机 | 没有手机，先用模拟设备体验 |
 | --- | --- | --- |
 | Windows | 双击 `start.bat` | 在命令行运行 `start.bat --demo` |
-| macOS / Linux | `./start.sh` | `./start.sh --demo` |
+| macOS | 双击 `PerfScope.command`（或 `./start.sh`） | `./start.sh --demo` |
+| Linux | `./start.sh` | `./start.sh --demo` |
 
 第一次运行需要下载依赖，大约一两分钟。启动后：
 

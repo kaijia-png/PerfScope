@@ -179,7 +179,8 @@ def test_client_download(tmp_path, monkeypatch):
     names = z.namelist()
     assert z.read("PerfScope/server.txt").decode().strip() == "http://10.1.2.3:9000"   # the address they used
     assert "http://10.1.2.3:9000" in z.read("PerfScope/START-HERE.txt").decode()
-    assert (z.getinfo("PerfScope/start.sh").external_attr >> 16) & 0o111                # still executable
+    for f in ("start.sh", "PerfScope.command"):                                       # still executable
+        assert (z.getinfo(f"PerfScope/{f}").external_attr >> 16) & 0o111
     assert "PerfScope/client/perfclient/app.py" in names
     assert not [n for n in names if any(x in n for x in ("/.venv/", "/data/", "__pycache__", ".db", "run.log"))]
 

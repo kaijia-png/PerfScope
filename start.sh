@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PerfScope 一键启动（macOS / Linux）
+# PerfScope 一键启动（macOS / Linux；macOS 上也可以直接双击 PerfScope.command）
 #   ./start.sh          连接真实手机
 #   ./start.sh --demo   没有手机时用模拟设备体验
 set -e
@@ -16,9 +16,23 @@ SERVER_HOST="${SERVER_HOST:-127.0.0.1}"
 PUBLIC_HOST="${PUBLIC_HOST:-127.0.0.1}"
 CLIENT_PORT="${CLIENT_PORT:-8765}"
 
+install_hint() {
+  if command -v brew >/dev/null 2>&1; then echo "  在终端运行：brew install $1"
+  else echo "  下载安装：$2"; fi
+}
+
+# macOS 自带的 /usr/bin/python3 只是个占位程序，没装开发者工具时一运行就会弹窗，所以优先找真正装好的 Python
+if [ -z "$PYTHON" ]; then
+  for c in /opt/homebrew/bin/python3 /usr/local/bin/python3 /Library/Frameworks/Python.framework/Versions/Current/bin/python3 \
+           /opt/homebrew/bin/python3.1[0-9] /usr/local/bin/python3.1[0-9]; do   # brew python@3.x 可能只有带版本号的命令
+    [ -x "$c" ] && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null && { PYTHON="$c"; break; }
+  done
+fi
 PY="${PYTHON:-python3}"
-if ! command -v "$PY" >/dev/null 2>&1; then
-  echo "没有找到 Python 3。请先安装 Python 3.10 或更新版本：https://www.python.org/downloads/"
+if ! command -v "$PY" >/dev/null 2>&1 || \
+   { [ "$(command -v "$PY")" = /usr/bin/python3 ] && [ "$(uname)" = Darwin ] && ! xcode-select -p >/dev/null 2>&1; }; then
+  echo "没有找到 Python 3，请先安装 Python 3.10 或更新版本，装好后重新启动 PerfScope："
+  install_hint python@3.12 https://www.python.org/downloads/
   exit 1
 fi
 if ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
@@ -40,9 +54,8 @@ if [ "$1" = "--demo" ]; then
   export ADB_PATH="$ROOT/tools/fake_adb.py"
   echo "演示模式：使用模拟设备"
 elif ! command -v adb >/dev/null 2>&1 && [ -z "$ADB_PATH" ]; then
-  echo "提示：没有找到 adb。连接手机测试需要安装 Android platform-tools："
-  echo "  macOS: brew install android-platform-tools"
-  echo "  其他:  https://developer.android.com/tools/releases/platform-tools"
+  echo "提示：没有找到 adb，测 Android 手机需要先安装（只测 iPhone 可以忽略）："
+  install_hint android-platform-tools https://developer.android.com/tools/releases/platform-tools
   echo "没有手机也可以先用演示模式：./start.sh --demo"
 fi
 
