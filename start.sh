@@ -14,6 +14,7 @@ if [ "$SHARE" = "1" ]; then
 fi
 SERVER_HOST="${SERVER_HOST:-127.0.0.1}"
 PUBLIC_HOST="${PUBLIC_HOST:-127.0.0.1}"
+CLIENT_PORT_SET="$CLIENT_PORT"
 CLIENT_PORT="${CLIENT_PORT:-8765}"
 
 install_hint() {
@@ -65,6 +66,10 @@ port_busy() { "$VPY" -c "import socket,sys; s=socket.socket(); sys.exit(0 if s.c
 REMOTE_SERVER=""
 [ -f "$ROOT/server.txt" ] && REMOTE_SERVER="$(head -1 "$ROOT/server.txt" | tr -d '[:space:]')"
 
+# 没指定客户端端口且 8765 被占用（比如这台电脑上已经开着另一份 PerfScope）时，自动换下一个空闲端口
+if [ -z "$CLIENT_PORT_SET" ]; then
+  for i in $(seq 0 20); do port_busy "$CLIENT_PORT" || break; CLIENT_PORT=$((CLIENT_PORT + 1)); done
+fi
 checks="客户端:$CLIENT_PORT:CLIENT_PORT"
 [ -z "$REMOTE_SERVER" ] && checks="服务端:$SERVER_PORT:SERVER_PORT $checks"
 for pair in $checks; do
