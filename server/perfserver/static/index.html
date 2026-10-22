@@ -31,6 +31,10 @@ h2{font-size:16px;margin:28px 0 10px}
 
 .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:14px}
 .filters label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:4px}
+.pager{display:flex;align-items:center;gap:10px;padding:12px 4px 2px;font-size:13px;flex-wrap:wrap}
+.pager label{display:flex;align-items:center;gap:6px}
+.pager select{width:auto;min-width:0;padding:4px 8px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
 input[type=text],input[type=number],select,textarea{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;min-width:140px}
 .btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 14px;cursor:pointer}
 .btn:hover{border-color:var(--muted)}
@@ -350,7 +354,9 @@ const groupPoints = points => { const by = {}; for (const [ts, m, v] of points) 
 
 
 /* ---------------- list ---------------- */
-const listState = {selected: [], filters: {}};
+const PAGE_SIZES = [20, 50, 100];
+const listState = {selected: [], filters: {}, page: 1,
+  size: (() => { try { const n = +localStorage.getItem("perfscope.pageSize"); return PAGE_SIZES.includes(n) ? n : 20; } catch { return 20; } })()};
 async function viewList() {
   const projects = await api("/api/projects");
   const f = listState.filters;
@@ -366,15 +372,18 @@ async function viewList() {
     <div id="listBody" class="wrap"></div>
     <div id="selbar"></div>`;
   $("#fGo").onclick = () => { listState.filters = {project: $("#fProject").value, app_version: $("#fVersion").value.trim(),
-    tag: $("#fTag").value.trim(), q: $("#fQ").value.trim()}; loadList(); };
+    tag: $("#fTag").value.trim(), q: $("#fQ").value.trim()}; listState.page = 1; loadList(); };
   ["#fVersion", "#fTag", "#fQ"].forEach(s => $(s).onkeydown = e => { if (e.key === "Enter") $("#fGo").click(); });
   $("#fProject").onchange = () => $("#fGo").click();
   loadList();
 }
 async function loadList() {
   const qs = new URLSearchParams(Object.entries(listState.filters).filter(([, v]) => v));
+  qs.set("limit", listState.size); qs.set("offset", (listState.page - 1) * listState.size);
   try {
-    const d = await api("/api/sessions?" + qs);
+    let d = await api("/api/sessions?" + qs);
+    const pages = Math.max(1, Math.ceil(d.total / listState.size));
+    if (!d.items.length && listState.page > pages) { listState.page = pages; return loadList(); }   // e.g. last page emptied by a delete
     if (!d.items.length) { $("#listBody").innerHTML = `<div class="empty"><b>没有符合条件的测试记录</b>在客户端完成测试后点「上传」，记录会出现在这里。</div>`; renderSelbar(); return; }
     $("#listBody").innerHTML = `<table><thead><tr><th></th><th>名称</th><th>项目</th><th>应用 / 版本</th><th>设备</th><th>开始时间</th><th class="num">时长</th><th class="num">告警</th><th class="num">进程异常</th><th>上传者</th></tr></thead><tbody>${
       d.items.map(s => `<tr>
@@ -388,7 +397,19 @@ async function loadList() {
         <td class="num ${s.alert_count ? "bad" : ""}">${s.alert_count}</td>
         <td class="num ${s.crash_count ? "bad" : ""}">${s.crash_count}</td>
         <td>${esc(s.created_by)}</td></tr>`).join("")}</tbody></table>
-      <p class="small muted">共 ${d.total} 条</p>`;
+      <div class="pager" role="navigation" aria-label="分页">
+        <span class="muted">共 ${d.total} 条</span><span style="flex:1"></span>
+        <button class="btn" data-pg="-1" ${listState.page <= 1 ? "disabled" : ""} aria-label="上一页">‹ 上一页</button>
+        <span>第 ${listState.page} / ${pages} 页</span>
+        <button class="btn" data-pg="1" ${listState.page >= pages ? "disabled" : ""} aria-label="下一页">下一页 ›</button>
+        <label class="muted">每页<select id="pgSize" aria-label="每页条数">${PAGE_SIZES.map(n => `<option ${n === listState.size ? "selected" : ""}>${n}</option>`).join("")}</select>条</label>
+      </div>`;
+    $("#listBody").querySelectorAll("[data-pg]").forEach(b => b.onclick = async () => { listState.page += +b.dataset.pg; await loadList(); $("#listBody").scrollIntoView({block: "start"}); });
+    $("#pgSize").onchange = e => {
+      listState.size = +e.target.value; listState.page = 1;
+      try { localStorage.setItem("perfscope.pageSize", listState.size); } catch {}
+      loadList();
+    };
     $("#listBody").querySelectorAll("input[type=checkbox]").forEach(cb => cb.onchange = () => {
       const id = cb.dataset.id;
       listState.selected = cb.checked ? [...listState.selected, id] : listState.selected.filter(x => x !== id);
