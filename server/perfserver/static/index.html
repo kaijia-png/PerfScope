@@ -56,7 +56,8 @@ tbody tr:hover{background:#FAFBFC}
 .tag.alert{background:#FBE9E7;color:var(--bad)} .tag.marker{background:#E8EFFC;color:var(--signal)} .tag.crash{background:#FFF4E0;color:var(--warn)}
 .bad{color:var(--bad);font-weight:500} .good{color:var(--good);font-weight:500}
 
-.selbar{position:sticky;bottom:0;background:var(--ink);color:#fff;border-radius:8px;padding:10px 16px;display:flex;gap:14px;align-items:center;margin-top:14px}
+#selbar{position:sticky;top:0;z-index:5}
+.selbar{background:var(--ink);color:#fff;border-radius:8px;padding:10px 16px;display:flex;gap:14px;align-items:center;margin-bottom:14px}
 .selbar .btn{background:#fff;color:var(--ink);border-color:#fff}
 
 .facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-top:16px}
@@ -369,8 +370,8 @@ async function viewList() {
       <label>名称包含<input type="text" id="fQ" value="${esc(f.q || "")}"></label>
       <button class="btn primary" id="fGo">筛选</button>
     </div>
-    <div id="listBody" class="wrap"></div>
-    <div id="selbar"></div>`;
+    <div id="selbar"></div>
+    <div id="listBody" class="wrap"></div>`;
   $("#fGo").onclick = () => { listState.filters = {project: $("#fProject").value, app_version: $("#fVersion").value.trim(),
     tag: $("#fTag").value.trim(), q: $("#fQ").value.trim()}; listState.page = 1; loadList(); };
   ["#fVersion", "#fTag", "#fQ"].forEach(s => $(s).onkeydown = e => { if (e.key === "Enter") $("#fGo").click(); });
