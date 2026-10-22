@@ -322,8 +322,12 @@ class SessionRunner:
         if self.status == "running":
             self._event(etype, label, ts)
 
-    def add_marker(self, label):
-        self._event("marker", label)
+    def add_marker(self, label, ts=None):
+        """ts: when the tester acted (clicked, or started typing), so typing the name doesn't shift it"""
+        now = int(time.time() * 1000)
+        ts = now if ts is None else max(self.started_at or 0, min(int(ts), now))
+        self._event("marker", label, ts)
+        return ts
 
     def _check_alerts(self, ts, values):
         for metric, v in values.items():

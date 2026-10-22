@@ -85,6 +85,19 @@ class Store:
             self.conn.execute("INSERT INTO events VALUES (?,?,?,?)", (sid, ts, etype, label))
             self.conn.commit()
 
+    def rename_session(self, sid, name):
+        with self.lock:
+            n = self.conn.execute("UPDATE sessions SET name=? WHERE id=?", (name, sid)).rowcount
+            self.conn.commit()
+        return n
+
+    def rename_event(self, sid, ts, etype, old, new):
+        with self.lock:
+            n = self.conn.execute("UPDATE events SET label=? WHERE session_id=? AND ts=? AND type=? AND label=?",
+                                  (new, sid, ts, etype, old)).rowcount
+            self.conn.commit()
+        return n
+
     def list_sessions(self, limit=10000):
         with self.lock:
             rows = self.conn.execute(

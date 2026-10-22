@@ -115,6 +115,7 @@ def stop():
 
 class MarkerReq(BaseModel):
     label: str
+    ts: Optional[int] = None   # epoch ms of the click / first keystroke; default: now
 
 
 @app.post("/api/run/marker")
@@ -122,8 +123,60 @@ def marker(req: MarkerReq):
     r = state["runner"]
     if not r or r.status != "running":
         err("没有进行中的测试")
-    r.add_marker(req.label.strip() or "标记")
-    return {"ok": True}
+    ts = r.add_marker(req.label.strip() or "标记", req.ts)
+    return {"ok": True, "ts": ts}
+
+
+class NameReq(BaseModel):
+    name: str
+
+
+@app.post("/api/sessions/{sid}/rename")
+def rename_session(sid: str, req: NameReq):
+    name = " ".join(req.name.split())[:100]
+    if not name:
+        err("测试名称不能为空")
+    if not store.rename_session(sid, name):
+        err("找不到这条记录")
+    return {"ok": True, "name": name, **_sync_name(sid, name)}
+
+
+def _sync_name(sid, name):
+    """An uploaded record is renamed on the server too, so nobody has to re-upload for a new name."""
+    s = store.get_session(sid)
+    st = get_settings()
+    if not (s and s.get("remote_id") and st["server_url"]):
+        return {"synced": None}
+    from urllib.parse import quote
+    import requests
+    headers = {"X-User": quote(st["user"])} if st["user"] else {}
+    if st["token"]:
+        headers["Authorization"] = f"Bearer {st['token']}"
+    try:
+        r = requests.patch(f"{st['server_url'].rstrip('/')}/api/sessions/{quote(s['remote_id'])}",
+                           json={"name": name}, headers=headers, timeout=8)
+        if r.status_code < 400:
+            return {"synced": True}
+        return {"synced": False, "warning": f"服务器上的名称没有同步（{r.status_code}），可以点「重新上传」"}
+    except requests.RequestException:
+        return {"synced": False, "warning": "连不上服务器，服务器上还是旧名称；连上后点「重新上传」即可"}
+
+
+class RenameReq(BaseModel):
+    ts: int
+    old: str
+    label: str
+
+
+@app.post("/api/sessions/{sid}/markers/rename")
+def rename_marker(sid: str, req: RenameReq):
+    """Markers can be named after the fact: mark first, type the name later."""
+    label = req.label.strip()
+    if not label:
+        err("标记名称不能为空")
+    if not store.rename_event(sid, req.ts, "marker", req.old, label[:200]):
+        err("找不到这个标记")
+    return {"ok": True, "label": label[:200]}
 
 
 def _meta_for(session, keys):

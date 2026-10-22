@@ -4,14 +4,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PerfScope 客户端</title>
+<script>
+  try { const t = localStorage.getItem("perfscope.theme");
+        document.documentElement.dataset.theme = t === "light" || t === "dark" ? t : (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  } catch { document.documentElement.dataset.theme = "dark"; }
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 :root{
-  --paper:#F3F5F6; --surface:#FFFFFF; --ink:#18222D; --muted:#5E6C79; --line:#D9DFE4;
-  --signal:#1E5BD8; --good:#17805A; --bad:#C2352B; --warn:#B7791F;
+  /* dark "instrument" theme */
+  color-scheme:dark;
+  --paper:#070C18; --surface:#0E1629; --surface-2:#111B31; --field:#0A1222; --ink:#E2E8F0; --muted:#7D8FA9; --line:#1C2842;
+  --signal:#38BDF8; --signal-2:#818CF8; --good:#34D399; --bad:#FF5C7A; --warn:#F5B544;
+  --glow:0 0 0 1px rgba(56,189,248,.25),0 0 18px rgba(56,189,248,.18);
+  --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
   --font:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+
+  --c-rgb:56,189,248; --sh-1:rgba(0,0,0,.55); --sh-2:rgba(0,0,0,.45);
+  /* chart colours, read by the scripts */
+  --c-accent:#38BDF8; --c-axis:#7D8FA9; --c-axisline:#26344F; --c-grid:#162139; --c-amber:#F5B544; --c-red:#FF5C7A;
+  --c-green:#34D399; --c-purple:#A78BFA; --c-teal:#22D3EE; --c-text2:#94A3B8; --c-faint:#33435F;
+  --c-tipbg:rgba(10,18,34,.96); --c-tipfg:#E2E8F0; --c-sliderbg:rgba(255,255,255,.02); --c-glow:rgba(56,189,248,.45);
+  --c-lines:#22D3EE,#A78BFA,#34D399,#F472B6,#FBBF24,#60A5FA,#FB7185,#A3E635,#FB923C,#38BDF8;
+  --h-0A1326:#0A1326;--h-0B1324:#0B1324;--h-0B1A33:#0B1A33;--h-0E2A44:#0E2A44;--h-0F172A:#0F172A;--h-1E1A0E:#1E1A0E;--h-21456B:#21456B;--h-2A1320:#2A1320;--h-33435F:#33435F;--h-38BDF8:#38BDF8;--h-4A5B78:#4A5B78;--h-5C4A1E:#5C4A1E;--h-7D8FA9:#7D8FA9;--h-F5B544:#F5B544;--h-FF5C7A:#FF5C7A;--h-FF7A90:#FF7A90;
+}
+/* ---------- light theme: white surfaces, blue accent ---------- */
+:root[data-theme=light]{
+  color-scheme:light;
+  --paper:#F4F6FA; --surface:#FFFFFF; --surface-2:#FFFFFF; --field:#FFFFFF; --ink:#18222D; --muted:#5E6C79; --line:#E2E8F0;
+  --signal:#2563EB; --signal-2:#4F46E5; --good:#17805A; --bad:#D92D3F; --warn:#B7791F;
+  --glow:0 0 0 3px rgba(37,99,235,.15);
+  --c-rgb:37,99,235; --sh-1:rgba(16,24,40,.18); --sh-2:rgba(16,24,40,.10);
+  --c-accent:#2563EB; --c-axis:#64748B; --c-axisline:#D9DFE4; --c-grid:#EEF2F6; --c-amber:#C27803; --c-red:#D92D3F;
+  --c-green:#16A34A; --c-purple:#7C3AED; --c-teal:#0891B2; --c-text2:#475569; --c-faint:#CBD5E1;
+  --c-tipbg:rgba(255,255,255,.98); --c-tipfg:#18222D; --c-sliderbg:rgba(15,23,42,.02); --c-glow:rgba(37,99,235,.25);
+  --c-lines:#0891B2,#7C3AED,#059669,#DB2777,#D97706,#2563EB,#E11D48,#65A30D,#EA580C,#0284C7;
+  --h-0A1326:#0A1326;--h-0B1324:#FAFBFC;--h-0B1A33:#0B1A33;--h-0E2A44:#EAF0FC;--h-0F172A:#18222D;--h-1E1A0E:#FFF4E0;--h-21456B:#C9D7F5;--h-2A1320:#FBE9E7;--h-33435F:#C3CDD6;--h-38BDF8:#1E5BD8;--h-4A5B78:#A9B6C2;--h-5C4A1E:#F1D7A6;--h-7D8FA9:#5E6C79;--h-F5B544:#B7791F;--h-FF5C7A:#C2352B;--h-FF7A90:#FF8A80;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
@@ -30,10 +60,10 @@ h2{font-size:15px;margin:0 0 10px;font-weight:700}
 label.f,div.f{display:block;margin:0 0 12px}
 label.f>span,div.f>span{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
 input[type=text],input[type=number],select,textarea{
-  width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:#fff}
+  width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--field)}
 /* one chevron for every dropdown: native selects and the app picker look the same */
 select,.combo input{appearance:none;-webkit-appearance:none;padding-right:30px;
-  background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%235E6C79' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
+  background:var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%237D8FA9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
 textarea{min-height:64px;resize:vertical;font-size:13px}
 /* Alert thresholds and business metrics: fill in numbers, no syntax to learn */
 .arows{display:grid;gap:6px}
@@ -50,7 +80,7 @@ textarea{min-height:64px;resize:vertical;font-size:13px}
 .cmpview .bad{color:var(--bad);font-weight:500} .cmpview .good{color:var(--good);font-weight:500}
 .cmpview .num{text-align:right;font-variant-numeric:tabular-nums}
 .cmpview .wrap{overflow-x:auto}
-.cmpview .warn{background:#FFF4E0;border:1px solid #F1D7A6;color:#7A4F0E;border-radius:8px;padding:10px 14px;margin:12px 0}
+.cmpview .warn{background:var(--h-1E1A0E);border:1px solid var(--h-5C4A1E);color:var(--h-F5B544);border-radius:8px;padding:10px 14px;margin:12px 0}
 .cmpview .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px}
 .cmpview .filters label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:4px}
 .rngs{display:grid;gap:10px}
@@ -65,21 +95,26 @@ textarea{min-height:64px;resize:vertical;font-size:13px}
 .rng-f select:disabled{color:var(--muted);background-color:var(--paper);cursor:not-allowed;pointer-events:none}
 .rng-f input.badin{border-color:var(--bad)}
 .rpre{display:flex;gap:4px;align-self:flex-end;flex-wrap:wrap}
-.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 10px;font-size:12px;color:var(--ink);cursor:pointer;line-height:1.4}
-.chip:hover{border-color:#1E5BD8;color:#1E5BD8}
-.chip.on{background:#EAF0FC;border-color:#1E5BD8;color:#1E5BD8}
-.chip:focus-visible{outline:2px solid #1E5BD8;outline-offset:1px}
+.chip{border:1px solid var(--line);background:var(--field);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--ink);cursor:pointer;line-height:1.4}
+.chip:hover{border-color:var(--h-38BDF8);color:var(--h-38BDF8)}
+.chip.on{background:var(--h-0E2A44);border-color:var(--h-38BDF8);color:var(--h-38BDF8)}
+.chip:focus-visible{outline:2px solid var(--h-38BDF8);outline-offset:1px}
 /* compare selection in local records */
 .cmpbar{display:flex;align-items:center;gap:10px;margin:0 0 10px;font-size:13px;color:var(--muted)}
 .cmpbar[hidden]{display:none}
 #historyBody td.pick,#historyBody th.pick{width:28px;padding-right:0}
+.rngpanel .rng-h select{width:auto;padding:3px 26px 3px 8px;margin-left:4px;background-position:right 6px center}
+.rngpanel .rng-h{justify-content:space-between}
+.rrtbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.rrtbl th,.pagetbl th{white-space:nowrap}
+.rrtbl .bad{color:var(--bad);font-weight:500}.rrtbl .good{color:var(--good);font-weight:500}.rrtbl .muted{color:var(--muted)}.rrtbl .small{font-size:12px}
 .pagetbl .num{text-align:right;font-variant-numeric:tabular-nums}
 /* pagination under local records */
 .pager{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;flex-wrap:wrap}
 .pager .grow{flex:1}
 .pager .btn{padding:4px 10px;min-width:32px}
 .pager .btn:disabled{opacity:.4;cursor:default}
-.pager .pg.on{background:#EAF0FC;border-color:#1E5BD8;color:#1E5BD8;font-weight:600}
+.pager .pg.on{background:var(--h-0E2A44);border-color:var(--h-38BDF8);color:var(--h-38BDF8);font-weight:600}
 .pager label{display:flex;align-items:center;gap:4px;margin-left:8px}
 .pager select{width:auto;padding:3px 24px 3px 8px;background-position:right 6px center}
 /* local records: short columns never wrap */
@@ -96,35 +131,35 @@ textarea{min-height:64px;resize:vertical;font-size:13px}
 .facts dt{font-size:12px;color:var(--muted)}
 .facts dd{margin:0;font-size:13px;word-break:break-all}
 .sid{display:inline-flex;align-items:center;gap:4px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);background:var(--paper);border:1px solid transparent;border-radius:4px;padding:2px 6px;cursor:pointer}
-.sid:hover{color:#1E5BD8;border-color:#C9D7F5}
-.sid:focus-visible{outline:2px solid #1E5BD8;outline-offset:1px}
-button.op{height:100%;min-height:31px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer}
-button.op:hover{border-color:#1E5BD8;color:#1E5BD8}
-button.op:focus-visible{outline:2px solid #1E5BD8;outline-offset:1px}
+.sid:hover{color:var(--h-38BDF8);border-color:var(--h-21456B)}
+.sid:focus-visible{outline:2px solid var(--h-38BDF8);outline-offset:1px}
+button.op{height:100%;min-height:31px;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--field);font-size:14px;font-weight:600;color:var(--ink);cursor:pointer}
+button.op:hover{border-color:var(--h-38BDF8);color:var(--h-38BDF8)}
+button.op:focus-visible{outline:2px solid var(--h-38BDF8);outline-offset:1px}
 .arow input{padding:6px 8px}
 .hint{font-size:12px;color:var(--muted);margin:2px 0 6px}
 /* App picker: searchable single-select dropdown */
 /* Tooltip bubble (shared by every hint on the page) */
-.tip{position:fixed;z-index:1000;max-width:280px;padding:7px 10px;border-radius:6px;background:#18222D;color:#fff;
+.tip{position:fixed;z-index:1000;max-width:280px;padding:7px 10px;border-radius:6px;background:var(--h-0F172A);color:#fff;
   font-size:12px;line-height:1.55;font-weight:400;white-space:pre-line;word-break:break-word;pointer-events:none;
-  box-shadow:0 6px 18px rgba(24,34,45,.22);opacity:0;visibility:hidden;transition:opacity .12s ease}
+  box-shadow:0 6px 18px var(--sh-1);opacity:0;visibility:hidden;transition:opacity .12s ease}
 .tip.show{opacity:1;visibility:visible}
-.tip::after{content:"";position:absolute;left:var(--ax,50%);top:100%;margin-left:-5px;border:5px solid transparent;border-top-color:#18222D}
-.tip.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:#18222D}
+.tip::after{content:"";position:absolute;left:var(--ax,50%);top:100%;margin-left:-5px;border:5px solid transparent;border-top-color:var(--h-0F172A)}
+.tip.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--h-0F172A)}
 @media (prefers-reduced-motion:reduce){.tip{transition:none}}
 .info{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;margin-left:3px;border-radius:50%;
-  border:1px solid #C3CDD6;color:#8A97A3;font-size:8.5px;font-weight:700;line-height:1;cursor:help;vertical-align:0;flex:none;box-sizing:border-box}
-.info:hover,.info:focus-visible{border-color:#1E5BD8;color:#1E5BD8;outline:none}
+  border:1px solid var(--h-33435F);color:var(--h-7D8FA9);font-size:8.5px;font-weight:700;line-height:1;cursor:help;vertical-align:0;flex:none;box-sizing:border-box}
+.info:hover,.info:focus-visible{border-color:var(--h-38BDF8);color:var(--h-38BDF8);outline:none}
 .trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 /* Crash log dialog */
 dialog.logdlg{border:1px solid var(--line);border-radius:10px;padding:0;width:min(900px,94vw);max-height:86vh;display:none;flex-direction:column}
 dialog.logdlg[open]{display:flex}
-dialog.logdlg::backdrop{background:rgba(24,34,45,.35)}
+dialog.logdlg::backdrop{background:rgba(2,6,15,.65)}
 .logdlg .logh{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
 .logdlg .logh h3{flex:1;min-width:0;margin:0;font-size:14px;overflow-wrap:anywhere}
-.logdlg pre{margin:0;padding:14px 16px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;background:#FAFBFC;flex:1}
-.lnk{border:0;background:none;padding:0 2px;color:#1E5BD8;font-size:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-.lnk:focus-visible{outline:2px solid #1E5BD8;outline-offset:1px;border-radius:2px}
+.logdlg pre{margin:0;padding:14px 16px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;background:var(--h-0B1324);flex:1}
+.lnk{border:0;background:none;padding:0 2px;color:var(--h-38BDF8);font-size:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.lnk:focus-visible{outline:2px solid var(--h-38BDF8);outline-offset:1px;border-radius:2px}
 /* Sidebar groups */
 .grp{border-top:1px solid var(--line);padding:2px 0}
 .grp.fixed{border-top:0;padding-top:0}
@@ -133,10 +168,10 @@ dialog.logdlg::backdrop{background:rgba(24,34,45,.35)}
 .grp>summary::-webkit-details-marker{display:none}
 .gh>.info{margin-left:-3px}
 .grp>summary::before{content:"";width:12px;height:12px;flex:none;transform:rotate(-90deg);transition:transform .15s ease;
-  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%235E6C79' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center}
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%237D8FA9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center}
 .grp[open]>summary::before{transform:none}
-.grp>summary:hover{color:#1E5BD8}
-.grp>summary:focus-visible{outline:2px solid #1E5BD8;outline-offset:2px}
+.grp>summary:hover{color:var(--h-38BDF8)}
+.grp>summary:focus-visible{outline:2px solid var(--h-38BDF8);outline-offset:2px}
 .grp>summary>span:first-child{flex:none;white-space:nowrap}
 .grp .gs{margin-left:auto;padding-left:12px;font-weight:400;font-size:12px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .grp[open] .gs{display:none}
@@ -150,17 +185,17 @@ aside{padding-bottom:0}
 /* the dropdown's own chevron flips up while the list is open */
 .combo input{background-image:none}
 .combo::after{content:"";position:absolute;right:10px;top:50%;width:12px;height:12px;margin-top:-6px;pointer-events:none;
-  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%235E6C79' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%237D8FA9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center;
   transition:transform .15s ease}
 .combo.open::after{transform:rotate(180deg)}
 @media (prefers-reduced-motion:reduce){.combo::after{transition:none}}
 .combo ul{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 4px);margin:0;padding:4px 0;list-style:none;
-  background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 18px rgba(24,34,45,.12);max-height:260px;overflow:auto}
+  background:var(--field);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 18px var(--sh-2);max-height:260px;overflow:auto}
 .combo li{padding:6px 10px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:8px;word-break:break-all}
 .combo li[aria-selected=true]{font-weight:600}
-.combo li[aria-selected=true]::after{content:"✓";color:var(--accent,#1E5BD8)}
+.combo li[aria-selected=true]::after{content:"✓";color:var(--accent,var(--h-38BDF8))}
 .combo li.active{background:var(--paper)}
-.combo li mark{background:none;color:var(--accent,#1E5BD8);font-weight:700}
+.combo li mark{background:none;color:var(--accent,var(--h-38BDF8));font-weight:700}
 .combo li.none{color:var(--muted);cursor:default}
 .combo li small{color:var(--muted);font-weight:400;font-size:11px;margin-left:auto}
 .combo input[readonly]{cursor:pointer}
@@ -169,7 +204,7 @@ aside{padding-bottom:0}
 .checks{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:13px}
 .checks label{display:flex;gap:6px;align-items:center}
 
-.btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 14px;cursor:pointer}
+.btn{border:1px solid var(--line);background:var(--field);border-radius:6px;padding:7px 14px;cursor:pointer}
 .btn:hover{border-color:var(--muted)}
 .btn.primary{background:var(--signal);border-color:var(--signal);color:#fff}
 .btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
@@ -178,27 +213,44 @@ aside{padding-bottom:0}
 .btn.wide{width:100%;padding:10px}
 
 .tabs{display:flex;gap:4px;margin-bottom:18px;border-bottom:1px solid var(--line)}
-.tabs button{border:0;background:none;padding:8px 14px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button{white-space:nowrap;border:0;background:none;padding:8px 14px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
 .tabs .spacer{flex:1}
+.tabs button.sub{font-size:12px;padding:8px 10px}
 
 .runbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface);
   border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin-bottom:16px}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
-.dot.on{background:var(--good);box-shadow:0 0 0 4px rgba(23,128,90,.15)}
+.dot.on{background:var(--good);box-shadow:0 0 0 4px rgba(52,211,153,.15)}
 .runbar .name{font-weight:700}
 .runbar .clock{font-size:20px;font-weight:700;letter-spacing:.02em}
 .runbar .grow{flex:1}
 .runbar input{width:180px}
+.qmarks{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:10px;border-top:1px solid var(--line)}
+.qmarks .qml{font-size:12px;color:var(--muted);margin-right:2px}
+.qmarks .chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px}
+.qmarks .chip:disabled{opacity:.45;cursor:default}
+.qmarks kbd{font:11px/1 ui-monospace,Menlo,monospace;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:1px 4px;background:var(--paper)}
+.qmarks .qmhint{font-size:12px;color:var(--muted);margin-left:6px}
+.qmarks .qmflash{font-size:12px;color:var(--good);font-weight:600;opacity:0;transition:opacity .2s;margin-left:auto}
+.qmarks .qmflash.on{opacity:1}
+.evname{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:text;text-align:left}
+.evname span{color:var(--muted);font-size:11px;margin-left:5px;opacity:0}
+.evname:hover span,.evname:focus-visible span{opacity:1}
+.evname:hover{text-decoration:underline dotted;text-underline-offset:3px}
+.evedit{width:min(320px,100%);padding:2px 6px;font-size:13px}
+.dhead h2 .evedit{font-size:16px;font-weight:700;width:min(420px,100%)}
+.evname.nm{font-weight:inherit}
+@media (prefers-reduced-motion:reduce){.qmarks .qmflash{transition:none}}
 
 /* Readout rack: the instrument face of the tool */
 .rack{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
-  background:var(--ink);color:#fff;border-radius:8px;overflow:hidden;margin-bottom:16px}
+  background:linear-gradient(180deg,#0B1A33,#0A1326);color:#E2E8F0;border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.03);border-radius:8px;overflow:hidden;margin-bottom:16px}
 .ro{padding:12px 14px;border-right:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08)}
-.ro .k{font-size:12px;color:#A9B6C2}
+.ro .k{font-size:12px;color:var(--h-4A5B78)}
 .ro .v{font-size:26px;font-weight:700;line-height:1.2}
-.ro .v small{font-size:12px;font-weight:400;color:#A9B6C2;margin-left:3px}
-.ro.alert .v{color:#FF8A80}
+.ro .v small{font-size:12px;font-weight:400;color:var(--h-4A5B78);margin-left:3px}
+.ro.alert .v{color:var(--h-FF7A90)}
 
 /* Screenshot strip above the charts */
 .shots{display:flex;gap:16px;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:16px}
@@ -206,15 +258,35 @@ aside{padding-bottom:0}
 .shots img{max-width:100%;max-height:100%;display:block}
 .shots .shotinfo{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;justify-content:center}
 .shots .shotjump{display:flex;gap:8px;align-items:center}
-.shots input.shottime{width:7.5em;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:text}
-.shots input.shottime:hover{border-color:#A9B6C2}
-.shots input.shottime:focus{border-color:#1E5BD8;background:#fff;outline:none}
-.shots input.shottime.bad{border-color:#C2352B}
+.shots input.shottime{width:7.5em;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--field);cursor:text}
+.shots input.shottime:hover{border-color:var(--h-4A5B78)}
+.shots input.shottime:focus{border-color:var(--h-38BDF8);background:var(--field);outline:none}
+.shots input.shottime.bad{border-color:var(--h-FF5C7A)}
 .shots .shotinfo small{color:var(--muted);font-size:12px}
 .shots input.shotrange{width:100%}
 @media (max-width:600px){.shots{flex-direction:column}.shots .shotimg{height:240px;align-self:center}}
 .charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:12px}
 .chart{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.chart h3{display:flex;align-items:center;gap:6px}
+.chart h3>span:first-child{flex:none}
+.chart h3 .rstat{flex:1;min-width:0;text-align:right;font-size:11px;font-weight:400;color:var(--h-38BDF8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.zbtn{margin-left:auto;border:1px solid transparent;background:none;border-radius:4px;padding:2px 4px;color:var(--muted);cursor:pointer;line-height:0}
+.zbtn:hover,.zbtn:focus-visible{border-color:var(--line);color:var(--h-38BDF8);outline:none}
+dialog.zoomdlg{border:1px solid var(--line);border-radius:10px;padding:0;width:96vw;max-width:96vw;height:90vh;max-height:90vh;display:none;flex-direction:column}
+dialog.zoomdlg[open]{display:flex}
+dialog.zoomdlg::backdrop{background:rgba(2,6,15,.7)}
+.zoomdlg .zh{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.zoomdlg .zh h3{margin:0;font-size:15px}
+.zoomdlg .zstats{flex:1;min-width:0;font-size:12px;color:var(--ink);display:flex;flex-wrap:wrap;gap:4px 16px;font-variant-numeric:tabular-nums}
+.zoomdlg .zstats small{color:var(--muted);margin-left:4px}
+.zoomdlg .zb{flex:1;display:flex;min-height:0;gap:12px;padding:10px 12px 0}
+.zoomdlg .zc{flex:1;min-width:0}
+.zoomdlg .zs{flex:none;width:300px;overflow:auto}
+.zoomdlg .zs[hidden]{display:none}
+.zoomdlg .zs .shots{flex-direction:column;margin:0}
+.zoomdlg .zs .shotimg{height:min(52vh,460px)}
+.zoomdlg .zhint{margin:0;padding:6px 16px 10px;font-size:12px;color:var(--muted)}
+@media (max-width:820px){.zoomdlg .zs{display:none}}
 .chart h3{font-size:13px;margin:0;font-weight:500}
 .chart .c{height:190px}
 
@@ -223,13 +295,13 @@ aside{padding-bottom:0}
 .ev:last-child{border-bottom:0}
 .ev .t{color:var(--muted)}
 .tag{display:inline-block;font-size:12px;padding:0 6px;border-radius:4px;background:var(--paper)}
-.tag.alert{background:#FBE9E7;color:var(--bad)}
-.tag.marker{background:#E8EFFC;color:var(--signal)}
-.tag.crash{background:#FFF4E0;color:var(--warn)}
+.tag.alert{background:var(--h-2A1320);color:var(--bad)}
+.tag.marker{background:var(--h-0E2A44);color:var(--signal)}
+.tag.crash{background:var(--h-1E1A0E);color:var(--warn)}
 
 table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px}
-th{font-weight:500;color:var(--muted);background:#FAFBFC}
+th{font-weight:500;color:var(--muted);background:var(--h-0B1324)}
 tr:last-child td{border-bottom:0}
 
 .empty{background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:40px;text-align:center;color:var(--muted)}
@@ -238,11 +310,146 @@ tr:last-child td{border-bottom:0}
 .msg.err{color:var(--bad)} .msg.ok{color:var(--good)}
 
 dialog{border:1px solid var(--line);border-radius:10px;padding:22px;width:min(440px,92vw)}
-dialog::backdrop{background:rgba(24,34,45,.35)}
+dialog::backdrop{background:rgba(2,6,15,.65)}
 .hint{font-size:12px;color:var(--muted);margin:-6px 0 12px}
 
 @media (max-width:820px){.app{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line)}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+:root[data-theme=dark] /* ================= dark instrument theme: finishing layer ================= */
+body{background:
+  radial-gradient(1200px 600px at 85% -10%, rgba(56,189,248,.10), transparent 60%),
+  radial-gradient(900px 500px at -10% 110%, rgba(129,140,248,.08), transparent 60%),
+  linear-gradient(rgba(148,163,184,.035) 1px, transparent 1px) 0 0/28px 28px,
+  linear-gradient(90deg, rgba(148,163,184,.035) 1px, transparent 1px) 0 0/28px 28px,
+  var(--paper);}
+:root[data-theme=dark] aside{background:linear-gradient(180deg,rgba(14,22,41,.96),rgba(10,16,32,.96));border-right:1px solid var(--line);backdrop-filter:blur(6px)}
+:root[data-theme=dark] aside h1{display:flex;align-items:center;gap:10px;font-size:19px;letter-spacing:.02em}
+:root[data-theme=dark] aside h1::before{content:"";width:26px;height:26px;border-radius:7px;flex:none;
+  background:conic-gradient(from 210deg,#38BDF8,#818CF8,#22D3EE,#38BDF8);
+  -webkit-mask:radial-gradient(circle at 50% 50%,transparent 5px,#000 5.5px);mask:radial-gradient(circle at 50% 50%,transparent 5px,#000 5.5px);
+  box-shadow:0 0 16px rgba(56,189,248,.45)}
+:root[data-theme=dark] aside h1{background:linear-gradient(90deg,#E2E8F0,#93C5FD);-webkit-background-clip:text;background-clip:text;color:transparent}
+:root[data-theme=dark] .sub{font-family:var(--mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#5B6E8C}
+:root[data-theme=dark] .grp>summary,:root[data-theme=dark] .gh{color:#C7D2E3;letter-spacing:.02em}
+:root[data-theme=dark] label.f>span,:root[data-theme=dark] div.f>span,:root[data-theme=dark] .hint{color:#7D8FA9}
+:root[data-theme=dark] input[type=text],:root[data-theme=dark] input[type=number],:root[data-theme=dark] select,:root[data-theme=dark] textarea{background-color:var(--field);border-color:#1F2B45;color:var(--ink)}
+:root[data-theme=dark] input::placeholder,:root[data-theme=dark] textarea::placeholder{color:#4B5B76}
+:root[data-theme=dark] input:focus,:root[data-theme=dark] select:focus,:root[data-theme=dark] textarea:focus,:root[data-theme=dark] .combo input[aria-expanded=true]{outline:none;border-color:var(--signal);box-shadow:var(--glow)}
+:root[data-theme=dark] .btn{background:var(--surface-2);border-color:#22304D;color:var(--ink);transition:border-color .15s,box-shadow .15s,background .15s}
+:root[data-theme=dark] .btn:hover:not(:disabled){border-color:#33507A;background:#15223D}
+:root[data-theme=dark] .btn.primary{background:linear-gradient(135deg,#0EA5E9,#6366F1);border-color:transparent;color:#fff;font-weight:600;letter-spacing:.04em;
+  box-shadow:0 6px 20px rgba(56,189,248,.25),inset 0 1px 0 rgba(255,255,255,.18)}
+:root[data-theme=dark] .btn.primary:hover:not(:disabled){filter:brightness(1.08);box-shadow:0 8px 28px rgba(56,189,248,.35),inset 0 1px 0 rgba(255,255,255,.2)}
+:root[data-theme=dark] .btn.primary:disabled{filter:grayscale(.6) brightness(.7);box-shadow:none}
+:root[data-theme=dark] .btn.danger{background:linear-gradient(135deg,#F43F5E,#E11D48);border-color:transparent;box-shadow:0 6px 18px rgba(244,63,94,.25)}
+:root[data-theme=dark] .btn.ghost{background:transparent;border-color:transparent;color:var(--signal)}
+:root[data-theme=dark] .btn.ghost:hover:not(:disabled){background:rgba(56,189,248,.08);border-color:transparent}
+:root[data-theme=dark] .tabs{border-bottom-color:var(--line)}
+:root[data-theme=dark] .tabs button{letter-spacing:.03em}
+:root[data-theme=dark] .tabs button[aria-selected=true]{color:#F1F5F9;border-image:linear-gradient(90deg,#38BDF8,#818CF8) 1;text-shadow:0 0 12px rgba(56,189,248,.35)}
+:root[data-theme=dark] .chart,:root[data-theme=dark] .runbar,:root[data-theme=dark] .rng,:root[data-theme=dark] .facts,:root[data-theme=dark] .events,:root[data-theme=dark] .shots,:root[data-theme=dark] table,:root[data-theme=dark] .empty,:root[data-theme=dark] .steps section{background:linear-gradient(180deg,rgba(17,27,49,.92),rgba(13,21,39,.92));
+  border-color:var(--line);border-radius:10px;box-shadow:0 1px 0 rgba(255,255,255,.02) inset,0 10px 30px rgba(0,0,0,.25)}
+:root[data-theme=dark] .chart{transition:border-color .2s,box-shadow .2s}
+:root[data-theme=dark] .chart:hover{border-color:#26406A;box-shadow:0 0 0 1px rgba(56,189,248,.12),0 12px 32px rgba(0,0,0,.35)}
+:root[data-theme=dark] .chart h3{color:#C7D2E3;letter-spacing:.02em}
+:root[data-theme=dark] .rack{border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#0B1A33,#08111F);border:1px solid #1C2E4E;
+  box-shadow:0 0 0 1px rgba(56,189,248,.06),0 14px 40px rgba(0,0,0,.4)}
+:root[data-theme=dark] .ro{border-color:rgba(148,163,184,.08)}
+:root[data-theme=dark] .ro .k{color:#6B7F9E;font-size:11px;letter-spacing:.04em}
+:root[data-theme=dark] .ro .v{font-family:var(--mono);font-weight:600;color:#E0F2FE;text-shadow:0 0 14px rgba(56,189,248,.35)}
+:root[data-theme=dark] .ro .v small{color:#5B6E8C;font-family:var(--font)}
+:root[data-theme=dark] .ro.alert .v{color:#FF7A90;text-shadow:0 0 14px rgba(255,92,122,.45)}
+:root[data-theme=dark] .runbar .clock{font-family:var(--mono);color:#E0F2FE;text-shadow:0 0 14px rgba(56,189,248,.4)}
+:root[data-theme=dark] .dot.on{background:#34D399;box-shadow:0 0 0 0 rgba(52,211,153,.6);animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}70%{box-shadow:0 0 0 9px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+@media (prefers-reduced-motion:reduce){:root[data-theme=dark] .dot.on{animation:none;box-shadow:0 0 0 4px rgba(52,211,153,.2)}}
+:root[data-theme=dark] th{background:rgba(8,14,28,.9);color:#7D8FA9;font-size:12px;letter-spacing:.04em}
+:root[data-theme=dark] td{border-color:var(--line)}
+:root[data-theme=dark] tbody tr:hover td{background:rgba(56,189,248,.04)}
+:root[data-theme=dark] .num,:root[data-theme=dark] td.num,:root[data-theme=dark] .pagetbl .num,:root[data-theme=dark] .rrtbl .num,:root[data-theme=dark] .shottime,:root[data-theme=dark] .sid,:root[data-theme=dark] .facts dd{font-family:var(--mono)}
+:root[data-theme=dark] .tag{background:#16213A;color:#9FB0C9;border:1px solid #22304D}
+:root[data-theme=dark] .tag.alert{background:rgba(255,92,122,.12);color:#FF7A90;border-color:rgba(255,92,122,.3)}
+:root[data-theme=dark] .tag.marker{background:rgba(56,189,248,.12);color:#7DD3FC;border-color:rgba(56,189,248,.3)}
+:root[data-theme=dark] .tag.crash{background:rgba(245,181,68,.12);color:#FCD34D;border-color:rgba(245,181,68,.3)}
+:root[data-theme=dark] .ev{border-color:var(--line)}
+:root[data-theme=dark] .chip{background:var(--surface-2);border-color:#22304D;color:#C7D2E3}
+:root[data-theme=dark] .chip:hover{border-color:var(--signal);color:#E0F2FE}
+:root[data-theme=dark] .chip.on,:root[data-theme=dark] .pager .pg.on{background:rgba(56,189,248,.14);border-color:var(--signal);color:#E0F2FE;box-shadow:var(--glow)}
+:root[data-theme=dark] .combo ul{background:#0E1629;border-color:#22304D;box-shadow:0 16px 40px rgba(0,0,0,.55)}
+:root[data-theme=dark] .combo li.active{background:rgba(56,189,248,.10)}
+:root[data-theme=dark] .tip{background:rgba(10,18,34,.97);border:1px solid #26344F;box-shadow:0 10px 30px rgba(0,0,0,.55)}
+:root[data-theme=dark] .tip::after{border-top-color:#26344F}:root[data-theme=dark] .tip.below::after{border-bottom-color:#26344F}
+:root[data-theme=dark] .info{border-color:#33435F;color:#7D8FA9}
+:root[data-theme=dark] dialog{background:#0E1629;color:var(--ink);border-color:#22304D;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+:root[data-theme=dark] .shots .shotimg{background:#0A1222;border:1px solid var(--line)}
+:root[data-theme=dark] .foot{background:linear-gradient(180deg,rgba(10,16,32,0),rgba(10,16,32,.98) 30%);border-top-color:var(--line)}
+:root[data-theme=dark] .qmarks{border-top-color:var(--line)}
+:root[data-theme=dark] .qmarks kbd{background:#0A1222;border-color:#26344F;color:#7DD3FC}
+:root[data-theme=dark] .msg.err{color:#FF7A90}:root[data-theme=dark] .msg.ok{color:#34D399}
+:root[data-theme=dark] *{scrollbar-width:thin;scrollbar-color:#26344F transparent}
+:root[data-theme=dark] ::-webkit-scrollbar{width:10px;height:10px}:root[data-theme=dark] ::-webkit-scrollbar-thumb{background:#1E2A44;border-radius:10px;border:2px solid transparent;background-clip:padding-box}
+:root[data-theme=dark] ::-webkit-scrollbar-thumb:hover{background:#2A3A5C;background-clip:padding-box;border:2px solid transparent}
+
+/* ================= light theme: finishing layer ================= */
+:root[data-theme=light] body{background:radial-gradient(1100px 520px at 90% -12%, rgba(37,99,235,.07), transparent 60%),
+  radial-gradient(800px 420px at -10% 110%, rgba(79,70,229,.05), transparent 60%),#F4F6FA}
+:root[data-theme=light] aside{background:#FFFFFF;border-right:1px solid var(--line)}
+:root[data-theme=light] aside h1{display:flex;align-items:center;gap:10px;font-size:19px;letter-spacing:.02em;
+  background:linear-gradient(90deg,#0F172A,#2563EB);-webkit-background-clip:text;background-clip:text;color:transparent}
+:root[data-theme=light] aside h1::before{content:"";width:26px;height:26px;border-radius:7px;flex:none;
+  background:conic-gradient(from 210deg,#2563EB,#4F46E5,#0891B2,#2563EB);
+  -webkit-mask:radial-gradient(circle at 50% 50%,transparent 5px,#000 5.5px);mask:radial-gradient(circle at 50% 50%,transparent 5px,#000 5.5px);
+  box-shadow:0 4px 12px rgba(37,99,235,.3)}
+:root[data-theme=light] .sub{font-family:var(--mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#94A3B8}
+:root[data-theme=light] input[type=text],:root[data-theme=light] input[type=number],:root[data-theme=light] select,:root[data-theme=light] textarea{border-color:#DCE3EC}
+:root[data-theme=light] input:focus,:root[data-theme=light] select:focus,:root[data-theme=light] textarea:focus,:root[data-theme=light] .combo input[aria-expanded=true]{outline:none;border-color:var(--signal);box-shadow:var(--glow)}
+:root[data-theme=light] .btn{background:#FFFFFF;border-color:#DCE3EC;color:#1E293B;transition:border-color .15s,box-shadow .15s}
+:root[data-theme=light] .btn:hover:not(:disabled){border-color:#B8C7DC;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+:root[data-theme=light] .btn.primary{background:linear-gradient(135deg,#2563EB,#4F46E5);border-color:transparent;color:#fff;font-weight:600;letter-spacing:.04em;
+  box-shadow:0 6px 18px rgba(37,99,235,.28),inset 0 1px 0 rgba(255,255,255,.2)}
+:root[data-theme=light] .btn.primary:hover:not(:disabled){filter:brightness(1.06)}
+:root[data-theme=light] .btn.primary:disabled{filter:grayscale(.5) brightness(1.1);opacity:.6;box-shadow:none}
+:root[data-theme=light] .btn.danger{background:linear-gradient(135deg,#EF4444,#E11D48);border-color:transparent;color:#fff;box-shadow:0 6px 16px rgba(225,29,72,.22)}
+:root[data-theme=light] .btn.ghost{background:transparent;border-color:transparent;color:var(--signal);box-shadow:none}
+:root[data-theme=light] .btn.ghost:hover:not(:disabled){background:rgba(37,99,235,.06)}
+:root[data-theme=light] .tabs button[aria-selected=true]{color:#0F172A;border-image:linear-gradient(90deg,#2563EB,#4F46E5) 1}
+:root[data-theme=light] .chart,:root[data-theme=light] .runbar,:root[data-theme=light] .rng,:root[data-theme=light] .facts,:root[data-theme=light] .events,:root[data-theme=light] .shots,:root[data-theme=light] table,:root[data-theme=light] .empty{background:#FFFFFF;border-color:var(--line);border-radius:10px;
+  box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06)}
+:root[data-theme=light] .chart{transition:border-color .2s,box-shadow .2s}
+:root[data-theme=light] .chart:hover{border-color:#BFD3F7;box-shadow:0 0 0 3px rgba(37,99,235,.06),0 10px 28px rgba(16,24,40,.08)}
+:root[data-theme=light] th{background:#F8FAFC;color:#64748B;font-size:12px;letter-spacing:.04em}
+:root[data-theme=light] tbody tr:hover td{background:#F8FBFF}
+:root[data-theme=light] .tag{background:#F1F5F9;color:#475569;border:1px solid #E2E8F0}
+:root[data-theme=light] .tag.alert{background:#FDECEE;color:#C81E3A;border-color:#F8C9D0}
+:root[data-theme=light] .tag.marker{background:#EAF2FF;color:#1D4ED8;border-color:#C7DAFE}
+:root[data-theme=light] .tag.crash{background:#FFF4E0;color:#92400E;border-color:#F6DDAE}
+:root[data-theme=light] .chip{background:#FFFFFF;border-color:#DCE3EC;color:#1E293B}
+:root[data-theme=light] .chip:hover{border-color:var(--signal);color:var(--signal)}
+:root[data-theme=light] .chip.on,:root[data-theme=light] .pager .pg.on{background:#EAF2FF;border-color:var(--signal);color:#1D4ED8}
+:root[data-theme=light] .combo ul{background:#FFFFFF;border-color:#DCE3EC;box-shadow:0 16px 40px rgba(16,24,40,.14)}
+:root[data-theme=light] .combo li.active{background:#F1F6FF}
+:root[data-theme=light] .qmarks kbd{background:#F8FAFC;border-color:#DCE3EC;color:#2563EB}
+:root[data-theme=light] .runbar .clock{font-family:var(--mono);color:#0F172A}
+:root[data-theme=light] .foot{background:linear-gradient(180deg,rgba(255,255,255,0),#FFFFFF 30%)}
+:root[data-theme=light] dialog{box-shadow:0 30px 80px rgba(16,24,40,.25)}
+:root[data-theme=light] *{scrollbar-width:thin;scrollbar-color:#CBD5E1 transparent}
+
+/* ================= both themes ================= */
+.rack{border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#0B1A33,#08111F);border:1px solid #1C2E4E;color:#E2E8F0}
+.ro{border-color:rgba(148,163,184,.10)}
+.ro .k{color:#7D8FA9;font-size:11px;letter-spacing:.04em}
+.ro .v{font-family:var(--mono);font-weight:600;color:#E0F2FE;text-shadow:0 0 14px rgba(56,189,248,.35)}
+.ro .v small{color:#5B6E8C;font-family:var(--font)}
+.ro.alert .v{color:#FF7A90;text-shadow:0 0 14px rgba(255,92,122,.45)}
+.dot.on{background:#34D399;animation:pulse 1.6s infinite}
+@media (prefers-reduced-motion:reduce){.dot.on{animation:none;box-shadow:0 0 0 4px rgba(52,211,153,.2)}}
+.num,td.num,.pagetbl .num,.rrtbl .num,.shottime,.sid,.facts dd{font-family:var(--mono)}
+/* theme switch */
+.themebtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface-2);color:var(--muted);
+  border-radius:999px;padding:4px 10px;margin:4px 0 4px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
+.themebtn:hover{color:var(--signal);border-color:var(--signal)}
+.themebtn svg{width:14px;height:14px}
 </style>
 </head>
 <body>
@@ -259,7 +466,7 @@ dialog::backdrop{background:rgba(24,34,45,.35)}
         <div class="combo">
           <input type="text" id="deviceInput" role="combobox" aria-labelledby="deviceLabel" aria-expanded="false"
             aria-controls="deviceList" readonly placeholder="没有在线设备">
-          <ul id="deviceList" role="listbox" hidden></ul>
+          <ul id="deviceList" role="listbox" hidden data-noi18n></ul>
         </div>
         <button class="btn" id="refreshDev" style="flex:none">刷新</button>
       </div>
@@ -269,7 +476,7 @@ dialog::backdrop{background:rgba(24,34,45,.35)}
       <div class="combo">
         <input type="text" id="appInput" role="combobox" aria-labelledby="appLabel" aria-autocomplete="list"
           aria-expanded="false" aria-controls="appList" autocomplete="off" spellcheck="false" placeholder="搜索或选择应用">
-        <ul id="appList" role="listbox" hidden></ul>
+        <ul id="appList" role="listbox" hidden data-noi18n></ul>
       </div>
       <input type="hidden" id="app">
     </div>
@@ -316,9 +523,12 @@ dialog::backdrop{background:rgba(24,34,45,.35)}
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="live">实时</button>
     <button role="tab" aria-selected="false" data-tab="history">本地记录</button>
-    <button role="tab" aria-selected="false" data-tab="plugins">插件</button>
     <span class="spacer"></span>
+    <!-- developer-facing: what collectors / sources are installed; kept out of the way of the testing tabs -->
+    <button role="tab" aria-selected="false" data-tab="plugins" class="sub" data-tip="已安装的采集器、数据源和插件，一般开发扩展功能时才用">插件</button>
     <button id="settingsBtn">服务器设置</button>
+    <button type="button" class="themebtn" id="themeBtn"></button>
+    <button type="button" class="themebtn" id="langBtn" data-noi18n></button>
   </div>
 
   <section id="tab-live">
@@ -350,6 +560,310 @@ dialog::backdrop{background:rgba(24,34,45,.35)}
 </dialog>
 
 <script>
+// chart colours come from the CSS variables of the current theme (see :root / [data-theme=light])
+let C = {};
+function readThemeColors() {
+  const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+  C = {accent: v("--c-accent"), rgb: v("--c-rgb"), axis: v("--c-axis"), axisLine: v("--c-axisline"), grid: v("--c-grid"),
+       amber: v("--c-amber"), red: v("--c-red"), green: v("--c-green"), purple: v("--c-purple"), teal: v("--c-teal"),
+       text2: v("--c-text2"), faint: v("--c-faint"), tipBg: v("--c-tipbg"), tipFg: v("--c-tipfg"), sliderBg: v("--c-sliderbg"), glow: v("--c-glow"),
+       lines: v("--c-lines").split(",").map(x => x.trim())};
+  const name = "ps-" + document.documentElement.dataset.theme;
+  echarts.registerTheme(name, {
+    backgroundColor: "transparent",
+    textStyle: {color: C.text2, fontFamily: "JetBrains Mono, SF Mono, ui-monospace, Menlo, monospace"},
+    tooltip: {backgroundColor: C.tipBg, borderColor: C.axisLine, borderWidth: 1, textStyle: {color: C.tipFg, fontSize: 12},
+              extraCssText: "box-shadow:0 8px 24px var(--sh-1);border-radius:8px;"},
+    legend: {textStyle: {color: C.text2}},
+    axisPointer: {lineStyle: {color: C.accent, width: 1, opacity: .6}},
+    dataZoom: {textStyle: {color: C.axis}, borderColor: C.axisLine, backgroundColor: C.sliderBg,
+               dataBackground: {lineStyle: {color: C.faint}, areaStyle: {color: `rgba(${C.rgb},.08)`}},
+               handleStyle: {color: C.accent, borderColor: C.accent}, moveHandleStyle: {color: C.axisLine}},
+    toolbox: {iconStyle: {borderColor: C.axis}, emphasis: {iconStyle: {borderColor: C.accent}}},
+  });
+  return name;
+}
+let CHART_THEME = readThemeColors();
+/* ---------- i18n: English by default, 中文 on switch ----------
+   The page is written in Chinese; a translation layer rewrites visible text and the
+   placeholder / aria-label / data-tip / title attributes. Exact phrases first, then patterns
+   for sentences with numbers, then a few UI words. User content (test / marker / device names)
+   sits in [data-noi18n] and is never touched. */
+const I18N_EN = {
+  // navigation & layout
+  "实时": "Live", "本地记录": "Records", "插件": "Plugins", "服务器设置": "Server", "深色": "Dark", "浅色": "Light",
+  "PerfScope 客户端": "PerfScope", "性能采集客户端 · Android / iOS": "Performance profiler · Android / iOS",
+  "测试对象": "Target", "设备": "Device", "刷新": "Refresh", "被测应用": "App", "搜索或选择应用": "Search or pick an app",
+  "没有在线设备": "No device online", "没有在线设备，连接手机后点刷新": "No device online. Connect a phone, then Refresh",
+  "没有读取到应用，请先选择设备": "No apps yet. Pick a device first", "没有匹配的选项": "No matches", "无法读取设备": "Can't read devices",
+  "测试信息": "Test info", "项目": "Project", "测试名称": "Test name", "标签（逗号分隔）": "Tags (comma separated)", "环境": "Environment",
+  "如：录音中切后台 2h": "e.g. Recording in background, 2h", "录音, 后台, v2.3 回归": "recording, background, v2.3 regression",
+  "如：staging/US（可不填）": "e.g. staging/US (optional)", "未命名": "Untitled",
+  "采集设置": "Capture", "采样间隔（秒）": "Interval (s)", "时长": "Duration", "留空=手动结束": "Empty = stop manually",
+  "采集指标": "Metrics", "启动耗时": "Launch time", "开始前测 3 次冷启动耗时（会先关闭 App）": "Measure 3 cold starts first (closes the app)",
+  "截图": "Screenshots", "每秒截一张屏幕，显示在曲线上方": "One screenshot per second, shown above the charts",
+  "告警阈值": "Alerts", "超过阈值时记一条告警并在曲线上标红线；留空表示不告警": "Crossing a threshold logs an alert and draws a red line. Empty = no alert",
+  "先勾选要采集的指标": "Pick metrics to capture first", "不告警": "No alert", "未设置": "Not set",
+  "开始测试": "Start test", "数据源": "Sources", "App 日志中的业务指标": "Business metrics from app logs",
+  // live
+  "还没有开始测试": "No test running",
+  "在左侧选择设备和应用，点「开始测试」。测试过程中可以随时打标记，比如“开始录音”“切到后台”。":
+    "Pick a device and an app on the left, then click Start test. Add markers any time during the test, such as “Start recording” or “To background”.",
+  "输入标记名后回车": "Marker name, then Enter", "打标记": "Mark", "结束测试": "Stop test", "快捷标记": "Quick marks", "编辑": "Edit",
+  "快捷键：1–9 快捷标记 · M 立即打标记": "Shortcuts: 1–9 quick marks · M mark now",
+  "采集中": "Recording", "已结束": "Finished", "事件": "Events", "暂无事件": "No events yet",
+  "编辑快捷标记": "Edit quick marks", "每行一个，最多 9 个，按顺序对应快捷键 1–9。": "One per line, up to 9, mapped to keys 1–9 in order.",
+  "快捷标记，每行一个": "Quick marks, one per line", "恢复默认": "Reset", "取消": "Cancel", "保存": "Save",
+  "点击改名": "Click to rename", "点击修改名称": "Click to rename", "结束本次测试？数据已实时保存在本地。": "Stop this test? Data is already saved locally.",
+  "开始录音": "Start recording", "停止录音": "Stop recording", "切到后台": "To background", "回到前台": "To foreground", "发起提问": "Ask agent",
+  // records
+  "本地还没有测试记录": "No records yet",
+  "完成一次测试后会出现在这里，可以上传到服务器和团队共享。": "Finished tests appear here. Upload them to share with the team.",
+  "名称": "Name", "应用": "App", "开始时间": "Started", "状态": "Status", "服务器": "Server", "查看": "View", "上传": "Upload",
+  "重新上传": "Re-upload", "删除": "Delete", "已上传": "Uploaded", "未上传": "Not uploaded", "进行中": "Running", "已完成": "Finished",
+  "意外中断": "Interrupted", "上传中…": "Uploading…", "上传完成": "Uploaded", "对比所选": "Compare selected", "清除选择": "Clear",
+  "勾选两条或以上进行对比，先勾选的作为参照": "Tick two or more to compare. The first one ticked is the reference",
+  "删除这条本地记录？已上传到服务器的数据不受影响。": "Delete this record? Copies uploaded to the server are not affected.",
+  "删除这条测试记录？曲线、截图和日志都会一起删除，不能恢复。": "Delete this record? Charts, screenshots and logs are deleted too, permanently.",
+  "‹ 上一页": "‹ Prev", "下一页 ›": "Next ›", "每页条数": "Per page", "每页": "Per page", "条": "rows", "分页": "Pagination", "上一页": "Previous page", "下一页": "Next page", "← 返回本地记录": "← Back to records", "加载中…": "Loading…",
+  "复制排查信息": "Copy debug info", "已复制排查信息": "Debug info copied",
+  "复制记录 ID、设备、系统、应用版本、环境、时间等，可直接贴到 bug 单": "Copies record ID, device, OS, app version, environment and times, ready for a bug report",
+  "记录 ID": "Record ID", "设备序列号": "Device serial", "系统": "OS", "开始": "Start", "结束": "End", "项目 / 标签": "Project / tags",
+  "复制记录 ID": "Copy record ID", "标记名称": "Marker name", "名称": "Name", "项指标": "metrics", "本次测试没有事件": "No events in this test", "查看日志": "View log", "复制日志": "Copy log", "关闭": "Close",
+  // page load table
+  "页面加载时长": "Page load time", "页面": "Page", "打开次数": "Opens", "平均 (ms)": "Avg (ms)", "P90 (ms)": "P90 (ms)", "最慢 (ms)": "Slowest (ms)",
+  // range stats
+  "区间统计": "Range stats", "参考曲线": "Reference", "开始时间（距测试开始）": "Start (from test start)", "结束时间（距测试开始）": "End (from test start)",
+  "从标记开始": "From marker", "到标记结束": "To marker", "选择开始标记…": "Pick start marker…", "选择结束标记…": "Pick end marker…",
+  "本次没有标记": "No markers in this test", "全程": "Full", "指标": "Metric", "平均": "Avg", "最大": "Max", "最小": "Min",
+  "每小时变化": "Per hour", "全程平均": "Full avg", "区间 vs 全程": "Range vs full", "这段时间没有数据": "No data in this range",
+  "所选范围不足 5 分钟，算不出每小时变化": "Range under 5 minutes: no hourly trend", "无数据": "No data",
+  // compare
+  "时间范围": "Time ranges", "范围选择参考曲线": "Reference curve", "统一为参照的时长": "Match reference length", "全部恢复全程": "All full length",
+  "常用时长": "Presets", "同参照": "Same as ref", "和参照选中的时长一样": "Same length as the reference range",
+  "指标对比": "Metric comparison", "比较统计值": "Statistic", "差异阈值（%）": "Threshold (%)", "曲线叠加": "Overlaid curves",
+  "横轴为各自所选范围开始后的分钟数": "x axis: minutes from each range's start", "测试环境不一致，请确认数据是否可比：": "Test environments differ. Make sure the data is comparable:",
+  "其他测试保持各自的开始时间，结束时间按参照的时长截取，让每段一样长": "Keeps each test's start and cuts its end to the reference length, so every range is equally long",
+  "填好后按回车或点击空白处，结束时间自动设为「开始 + 时长」": "Press Enter or click outside: end = start + duration",
+  "时长，结束时间 = 开始 + 时长": "Duration, end = start + duration",
+  "拖动小图下方滑块两端选择范围，或直接输入「分:秒」，如 5:00；选好开始后，点常用时长或填写时长，结束时间会自动填上。":
+    "Drag the slider under the mini chart, or type mm:ss such as 5:00. After setting the start, pick a preset or type a duration and the end fills in.",
+  // screenshots & zoom
+  "手机屏幕截图": "Phone screenshot", "拖动查看各时刻的截图": "Drag to browse screenshots", "跳转到时间，格式 时:分:秒": "Jump to time, hh:mm:ss",
+  "回到最新": "Latest", "放大查看": "Enlarge", "放大查看：滚轮缩放、拖动滑块选范围、框选放大": "Enlarge: wheel to zoom, drag the slider, box zoom",
+  "还原": "Reset", "框选放大": "Box zoom", "后退一步": "Back",
+  "滚轮缩放 · 按住拖动平移 · 拖动下方滑块选范围 · 右上角工具可框选放大 · Esc 关闭": "Wheel to zoom · drag to pan · slider for range · box zoom at top right · Esc to close",
+  "鼠标移到下方任意曲线上，这里会显示那一刻的手机画面；也可以拖动滑块，或在上方输入时间，按回车或点击空白处跳转。":
+    "Hover any chart below to see the phone screen at that moment, or drag the slider, or type a time above and press Enter.",
+  "输入时间后按回车或点击空白处，跳到最接近的截图，如 19:49:52、19:49 或 194952；按 Esc 取消": "Type a time and press Enter to jump to the nearest screenshot, e.g. 19:49:52, 19:49 or 194952. Esc cancels",
+  // plugins page
+  "采集器": "Collectors", "钩子": "Hooks", "平台": "Platforms", "提供的指标": "Metrics", "来源": "Source", "内置": "Built-in",
+  "每个采样周期产出指标": "produce metrics every sampling tick", "持续推送业务指标或事件": "push business metrics or events",
+  "测试开始或结束时执行": "run when a test starts or ends", "设备连接方式": "how devices connect",
+  "新增插件：把 .py 文件放到 client/plugins/ 或 ~/.perfscope/plugins/，重启客户端即可。写法见 PLUGINS.md。":
+    "To add a plugin, put a .py file in client/plugins/ or ~/.perfscope/plugins/ and restart. See PLUGINS.md.",
+  "已安装的采集器、数据源和插件，一般开发扩展功能时才用": "Installed collectors, sources and plugins. Mostly for developers extending the tool",
+  // server dialog
+  "服务器地址": "Server URL", "用户名": "User name", "访问令牌": "Access token", "测试结束后自动上传": "Upload automatically when a test ends",
+  "保存设置": "Save", "已上传，查看报告": "Uploaded, view report", "已改名，服务器上的记录也同步改了": "Renamed, the server copy was renamed too",
+  // metrics (labels come from the collectors)
+  "App 内存 (PSS)": "App memory (PSS)", "App 内存 (Footprint)": "App memory (Footprint)", "线程数": "Threads", "FPS(整屏)": "FPS (screen)",
+  "卡顿率": "Stutter", "下行流量(整机)": "Download (device)", "上行流量(整机)": "Upload (device)", "下行流量(App)": "Download (app)",
+  "上行流量(App)": "Upload (app)", "电量": "Battery", "电池温度": "Battery temp", "电流": "Current", "冷启动耗时": "Cold start",
+  "帧/秒": "fps", "次/分": "/min", "个": "", "冷启动": "Cold start", "测启动": "launch", "截图失败": "Screenshot failed",
+  // event kinds
+  "标记": "Marker", "告警": "Alert", "重启": "Restart", "进程退出": "Exited", "进程启动": "Started", "错误": "Error", "闪退": "Crash",
+  "内存超限": "Jetsam", "异常报告": "Fault", "异常报告（未闪退）": "Fault report (no crash)",
+  // backend messages
+  "已有测试在进行，请先结束": "A test is already running. Stop it first", "没有进行中的测试": "No test is running",
+  "测试进行中，不能删除": "Can't delete a running test", "找不到这条记录": "Record not found", "找不到这个标记": "Marker not found",
+  "标记名称不能为空": "Marker name can't be empty", "测试名称不能为空": "Test name can't be empty", "会话不存在": "Record not found",
+  "截图不存在": "Screenshot not found", "请先选择设备": "Pick a device first", "请选择被测应用": "Pick an app", "至少选择一项指标": "Pick at least one metric",
+  "这个平台不支持截图": "Screenshots aren't supported on this platform", "请先解锁 iPhone": "Unlock the iPhone first",
+  "找不到设备，请检查数据线连接": "Device not found. Check the cable", "iOS 设备响应超时": "The iOS device timed out",
+  "请在 iPhone 上点「信任此电脑」并输入锁屏密码": "On the iPhone, tap Trust This Computer and enter the passcode",
+  "iPhone 还没有信任这台电脑，请解锁手机并点「信任」": "The iPhone doesn't trust this computer yet. Unlock it and tap Trust",
+  "iPhone 上拒绝了信任，请拔插数据线后重新点「信任」": "Trust was declined. Replug the cable and tap Trust",
+  "请在 iPhone「设置 → 隐私与安全性 → 开发者模式」中打开开发者模式，重启后再试": "Turn on Developer Mode in Settings → Privacy & Security → Developer Mode, restart, then retry",
+  "找不到 adb，请安装 Android platform-tools 或设置 ADB_PATH 环境变量": "adb not found. Install Android platform-tools or set ADB_PATH",
+  "请在手机上允许调试 / 信任此电脑": "Allow debugging / trust this computer on the phone",
+  "用 USB 连接手机（Android 开启 USB 调试；iPhone 点「信任此电脑」并打开开发者模式），然后点刷新":
+    "Connect a phone over USB (Android: turn on USB debugging; iPhone: trust this computer and turn on Developer Mode), then click Refresh",
+  "会话还在进行中，结束后再上传": "The test is still running. Upload after it ends", "还没有设置服务器地址": "No server URL set yet",
+  "连不上服务器，服务器上还是旧名称；连上后点「重新上传」即可": "Can't reach the server, so the server copy keeps the old name. Re-upload once connected",
+  // info bubbles
+  "要测试的手机和 App。Android 需打开 USB 调试；iPhone 需点「信任此电脑」并打开开发者模式。": "The phone and app to test. Android needs USB debugging; iPhone needs Trust This Computer and Developer Mode.",
+  "用数据线连接的手机。连接或授权后没出现，点「刷新」。": "Phones connected by cable. If one doesn't show after connecting or authorizing, click Refresh.",
+  "可以输入包名的一部分搜索，字母按顺序出现即可匹配，如 plaudios。": "Type part of the package name; letters only need to appear in order, e.g. plaudios.",
+  "用于在服务端查找、筛选、对比测试，都可以不填。": "Used to find, filter and compare tests on the server. All optional.",
+  "用于在本地记录里区分和查找测试，都可以不填。": "Used to tell tests apart in your records. All optional.",
+  "按产品区分测试，如「Plaud iOS」。服务端的记录和趋势按项目分开，填了新名字会自动创建。": "Groups tests by product, e.g. “Plaud iOS”. Server records and trends are split by project; new names are created automatically.",
+  "这次测的场景，显示在测试记录列表里。不填则用「包名 + 开始时间」。": "The scenario under test, shown in the records list. Empty = package name + start time.",
+  "给测试归类，可填多个。同一测试方案每次都打相同标签，就能在服务端「趋势」页看各版本的变化。": "Tags group tests; several are fine. Tag the same scenario the same way each time to follow it across versions on the server's Trend page.",
+  "被测包连的后端环境和区域，如 staging/US、prod/CN。会显示在测试记录的版本号后面，排查时区分是哪个环境的数据。": "Backend environment and region of the build, e.g. staging/US or prod/CN. Shown after the version in records.",
+  "大多数情况保持默认即可。": "The defaults fit most tests.",
+  "每隔多少秒采一次系统指标。越短越细，对手机的额外负担也越大，一般用 1 秒。": "Seconds between samples. Shorter is finer but costs the phone more; 1 s is typical.",
+  "到时间自动结束，如 2h、30m、90s。留空则一直采集，直到手动点「结束测试」。": "Stops automatically, e.g. 2h, 30m, 90s. Empty = runs until you click Stop test.",
+  "要记录的系统指标。没勾选的不采集，也不会出现在告警阈值里。鼠标移到各项上可看说明。": "System metrics to record. Unticked ones aren't captured or offered as alerts. Hover each for details.",
+  "开始测试前先关闭 App，再冷启动 3 次，记录每次从点开到首屏显示的耗时（取系统给出的 TotalTime），然后开始采集。仅 Android；iOS 需要 App 自己打 PERF|launch_ms|耗时 日志上报。":
+    "Before the test, closes the app and cold-starts it 3 times, recording time to first screen (the system's TotalTime). Android only; on iOS the app must log PERF|launch_ms|ms.",
+  "每秒截一张屏，鼠标移到曲线上可看对应时刻的画面。截图会压缩成小图，随测试一起上传。": "One screenshot per second; hover a chart to see that moment. Screenshots are shrunk and uploaded with the test.",
+  "每秒截一张屏，鼠标移到曲线上可看对应时刻的画面。截图会压缩成小图，存在本地。": "One screenshot per second; hover a chart to see that moment. Screenshots are shrunk and kept locally.",
+  "指标超过阈值时记一条告警，并在曲线上画红线。留空表示不告警，比较方向可以切换。": "Crossing a threshold logs an alert and draws a red line. Empty = no alert; the comparison can be flipped.",
+  "测试中的关键时刻：手动或 App 打的标记、触发的告警、App 退出或重启、采集出错。每个事件也会在曲线上画一条竖线。": "Key moments: markers (manual or from the app), alerts, app exits or restarts, capture errors. Each draws a line on the charts.",
+  "时间按开始输入的那一刻记录，慢慢打字也不会偏后。不想打字就直接点「打标记」或按 M，事后在事件里改名。": "Time is taken when you start typing, so slow typing doesn't shift it. Or click Mark / press M and rename it later in Events.",
+  "立即打一个标记（快捷键 M）；输入框里有文字时用这段文字": "Mark now (key M). Uses the text in the box if any",
+  "把范围的开始设为某个标记的时刻。标记是测试中点「打标记」记下的，如「开始录音」；告警、App 重启等事件也会列在这里。": "Sets the range start to a marker. Markers are added with Mark during a test; alerts and restarts are listed too.",
+  "把范围的结束设为某个标记的时刻，如「停止录音」。和「从标记开始」配合，可以精确比较两次测试中同一段操作。": "Sets the range end to a marker. With From marker, compare exactly the same step across tests.",
+  "这次测试没有打标记。下次测试时，在实时页上方输入「开始录音」等内容并点「打标记」，之后就能在这里按标记选范围。": "This test has no markers. Next time, add some with Mark on the Live page to pick ranges by marker here.",
+  "选一段时间，下表显示每个指标在这段时间里的统计值，并和全程平均对比。可以直接在下方任意曲线上按住鼠标左右拖动框选，也可以拖动这里的滑块、输入「分:秒」或按标记选；选中的那一段在每张曲线上都会标出来，并写上这段的平均、P90、最大、最小。":
+    "Pick a time range to see every metric's stats for it, compared with the full test. Drag across any chart below, use this slider, type mm:ss, or pick markers. The range is shaded on each chart with its avg, P90, max and min.",
+  "Android 自动读取系统记录的页面（Activity）打开耗时；App 打 PERF_PAGE|页面名|耗时 日志时按页面名统计，Android 和 iOS 通用。按平均耗时从慢到快排列。":
+    "Android reads Activity open times from the system; apps can also log PERF_PAGE|name|ms on Android and iOS. Sorted slowest first.",
+  "被测 App 占整机 CPU 的百分比（已按核心数折算）。": "App's share of total device CPU (normalized by core count).",
+  "Android 内存 PSS：App 实际占用的物理内存，共享内存按比例分摊。长时间测试中持续上涨通常意味着泄漏。": "Android PSS: physical memory used by the app, shared pages split proportionally. Steady growth usually means a leak.",
+  "iOS 内存 Footprint：和 Xcode 内存仪表、系统内存上限判断用的是同一个值。持续上涨通常意味着泄漏。": "iOS footprint: the value Xcode's memory gauge and the system limit use. Steady growth usually means a leak.",
+  "App 当前的线程数。反复操作后只涨不降，可能有线程泄漏。": "Current thread count. If it only grows with repeated actions, threads may be leaking.",
+  "每秒渲染的帧数。界面静止时为 0 属正常；iOS 统计的是整个屏幕。": "Frames rendered per second. 0 on a still screen is normal; iOS counts the whole screen.",
+  "每分钟的 Jank 次数（PerfDog 口径）：某一帧耗时超过前 3 帧平均的 2 倍，且超过 83.3 ms。用户能明显感到卡一下。仅 Android。": "Janks per minute (PerfDog): a frame over 2× the previous 3-frame average and over 83.3 ms. Noticeable to users. Android only.",
+  "每分钟的 BigJank 次数：同 Jank，但这一帧超过 125 ms，属于严重卡顿。BigJank 也计入 Jank。仅 Android。": "BigJanks per minute: like Jank but over 125 ms, a severe hitch. Also counted as Jank. Android only.",
+  "卡顿率：Jank 帧耗时之和占这段时间的比例。越低越流畅。仅 Android。": "Stutter: share of time spent in jank frames. Lower is smoother. Android only.",
+  "每秒下载的数据量。Android 是整机流量，iOS 只统计被测 App。": "Data downloaded per second. Whole device on Android, app only on iOS.",
+  "每秒上传的数据量。Android 是整机流量，iOS 只统计被测 App。": "Data uploaded per second. Whole device on Android, app only on iOS.",
+  "手机剩余电量百分比。": "Battery level remaining.", "电池温度。持续偏高会导致系统降频，影响其他指标。": "Battery temperature. Staying high triggers throttling that affects other metrics.",
+  "电池电流，反映耗电快慢；部分 Android 机型不提供。": "Battery current, showing how fast power drains. Some Android models don't report it.",
+  "团队共用的 PerfScope 服务端地址，测试数据上传到这里。": "The team's shared PerfScope server; test data is uploaded here.",
+  "上传的记录会显示为这个名字，只有上传者可以修改或删除自己的记录。": "Uploads show this name; only the uploader can edit or delete them.",
+  "上传记录会显示为这个名字": "Uploads show this name",
+  "服务端开启令牌认证时由管理员提供，没开启就留空。": "Given by the admin when the server uses tokens; otherwise leave empty.",
+  "测试结束后自动上传到服务端，不用再去「本地记录」里手动上传。": "Uploads to the server when a test ends, no manual upload needed.",
+};
+const STAT_EN = {"平均": "Avg", "P50": "P50", "P90": "P90", "P99": "P99", "最大": "Max", "最小": "Min", "每小时变化": "Per hour"};
+const t1 = s => I18N_EN[s] ?? s;   // exact phrase or itself
+// sentences with numbers / names: [pattern, replacement function]
+const I18N_RX = [
+  [/^说明：([\s\S]+)$/, (m, a) => `Info: ${trText(a)}`],
+  [/^([\d:]+)　([^：]{1,6})：([\s\S]+)$/, (m, t, k, rest) => `${t}　${t1(k)}: ${k === "标记" ? rest : trText(rest)}`],
+  [/^(\d+) 秒$/, (m, n) => `${n} s`], [/^(\d+) 分$/, (m, n) => `${n} min`],
+  [/^\((.+)\)$/, (m, u) => t1(u) ? `(${t1(u)})` : ""],
+  [/^(.+) 告警阈值$/, (m, a) => `${t1(a)} alert threshold`],
+  [/^共 (\d+) 条$/, (m, n) => `${n} total`],
+  [/^第 (\d+) \/ (\d+) 张$/, (m, a, b) => `${a} / ${b}`],
+  [/^已选 (\d+) 条，先选的作为参照$/, (m, n) => `${n} selected · first ticked is the reference`],
+  [/^已选 (\d+) 条，再选至少 1 条$/, (m, n) => `${n} selected · pick at least one more`],
+  [/^已选 ([\d:]+)$/, (m, a) => `Selected ${a}`],
+  [/^全长 ([\d:]+)$/, (m, a) => `Length ${a}`],
+  [/^每 ([\d.]+) 秒$/, (m, a) => `every ${a} s`],
+  [/^(\d+) 项指标$/, (m, n) => `${n} metrics`], [/^(\d+) 个标签$/, (m, n) => `${n} tags`], [/^(\d+) 条$/, (m, n) => `${n}`],
+  [/^对比 (\d+) 次测试$/, (m, n) => `Comparing ${n} tests`],
+  [/^以「(.+)」为参照。/, (m, a) => `Reference: “${a}”. Each test can use its own time range; stats and curves use only that range. Worse beyond the threshold is red, better is green.`],
+  [/^已标记：(.+?)\s+([\d:]+)$/, (m, a, b) => `Marked: ${a}  ${b}`],
+  [/^标记 (\d+)$/, (m, n) => `Marker ${n}`],
+  [/^页面加载：(.+)$/, (m, a) => `Page load: ${a}`],
+  [/^(.+) · 对比$/, (m, a) => `${t1(a)} · compare`],
+  [/^参照 · (.+)$/, (m, a) => `Ref · ${a}`],
+  [/^序列号 (.+)$/, (m, a) => `Serial ${a}`],
+  [/^([\s\S]*)\n点击复制完整 ID$/, (m, a) => `${a}\nClick to copy the full ID`],
+  [/^已复制\n([\s\S]*)$/, (m, a) => `Copied\n${a}`],
+  [/^切换到(深色|浅色)主题（当前：(深色|浅色)）$/, (m, a, b) => `Switch to ${t1(a).toLowerCase()} theme (now ${t1(b).toLowerCase()})`],
+  [/^切换到(深色|浅色)主题$/, (m, a) => `Switch to ${t1(a).toLowerCase()} theme`],
+  [/^(高于|低于)阈值时告警，点击切换(为低于|为高于)?$/, (m, a) => `Alert when ${a === "高于" ? "above" : "below"} the threshold; click to flip`],
+  [/^点击或按 (\d) 打标记「(.+)」$/, (m, n, a) => `Click or press ${n} to mark “${a}”`],
+  [/^选择「(.+)」进行对比$/, (m, a) => `Select “${a}” to compare`],
+  [/^复制记录 ID (.+)$/, (m, a) => `Copy record ID ${a}`],
+  [/^(\S+)不一致：(.+)$/, (m, a, b) => `${t1(a)} differs: ${b.replace(/未填/g, "not set")}`],
+  [/^(\d+) 个插件加载失败，详情见「插件」页$/, (m, n) => `${n} plugin(s) failed to load, see Plugins`],
+  [/^有 (\d+) 个插件加载失败，其他功能不受影响/, (m, n) => `${n} plugin(s) failed to load; everything else works`],
+  [/^请求失败 (\d+)$/, (m, n) => `Request failed ${n}`],
+  [/^PerfScope 测试：(.+)$/, (m, a) => `PerfScope test: ${a}`],
+  [/^平均 ([\d.\-]+)(\S*) · P90 ([\d.\-]+) · 最大 ([\d.\-]+) · 最小 ([\d.\-]+)（(\d+) 个点）$/, (m, a, u, p, x, n, c) => `Avg ${a}${u} · P90 ${p} · Max ${x} · Min ${n} (${c} points)`],
+  [/^（(\d+) 个点）$/, (m, n) => `(${n} points)`],
+  [/^（第 ([\d:]+)）$/, (m, a) => `(at ${a})`],
+  [/^(.+) · (采集中|已结束)(?: · 最近错误：(.+))?$/, (m, a, b, e) => `${a} · ${t1(b)}${e ? ` · last error: ${trText(e)}` : ""}`],
+  [/^冷启动 (\d+) ms（第 (\d+)\/(\d+) 次）$/, (m, ms, k, n) => `Cold start ${ms} ms (${k}/${n})`],
+  [/^进程重启 pid (\d+) → (\d+)$/, (m, a, b) => `Process restarted pid ${a} → ${b}`],
+  [/^进程启动 pid (\d+)$/, (m, a) => `Process started pid ${a}`],
+  [/^(.+) 未运行$/, (m, a) => `${a} is not running`],
+  [/^(.+) = ([\d.\-]+) 触发 (.+)$/, (m, a, v, r) => `${a} = ${v} crossed ${r}`],
+  [/^闪退：(.+)$/, (m, a) => `Crash: ${a}`], [/^Native 闪退：(.+)$/, (m, a) => `Native crash: ${a}`],
+  [/^异常报告（未闪退）：(.+)$/, (m, a) => `Fault report (no crash): ${a}`],
+  [/^内存超限被系统终止（(.+?)）(?:，当时占用约 (\d+) MB)?$/, (m, r, mb) => `Killed by the system for memory (${r})${mb ? `, using about ${mb} MB` : ""}`],
+  [/^ANR（应用无响应）：(.*)$/, (m, a) => `ANR (not responding): ${a}`],
+  [/^(.+)（完全绘制）$/, (m, a) => `${a} (fully drawn)`],
+  [/^采集异常: (.+)$/, (m, a) => `Capture error: ${trText(a)}`], [/^采集器 (\S+) 出错: (.+)$/, (m, a, e) => `Collector ${a} failed: ${trText(e)}`],
+  [/^读取崩溃日志失败: (.+)$/, (m, a) => `Couldn't read crash logs: ${trText(a)}`], [/^截图失败: (.+)$/, (m, a) => `Screenshot failed: ${trText(a)}`],
+  [/^冷启动测量失败: (.+)$/, (m, a) => `Cold start failed: ${trText(a)}`], [/^数据源 (\S+) 启动失败: (.+)$/, (m, a, e) => `Source ${a} failed to start: ${trText(e)}`],
+  [/^读取 iOS 日志中断: (.+)$/, (m, a) => `iOS log stream stopped: ${trText(a)}`],
+  [/^(.+) 暂不支持自动测冷启动，可以让 App 打日志 PERF\|launch_ms\|耗时 上报$/, (m, a) => `${a} can't measure cold start automatically; have the app log PERF|launch_ms|ms`],
+  [/^告警条件里的指标 (.+) 在 (\S+) 上不存在，可用的有: (.+)（业务指标以 biz\. 开头）$/, (m, a, p, l) => `Alert metric ${a} doesn't exist on ${p}. Available: ${l} (business metrics start with biz.)`],
+  [/^服务器上的名称没有同步（(\d+)），可以点「重新上传」$/, (m, c) => `The server copy wasn't renamed (${c}); use Re-upload`],
+  [/^(Android|iOS) (.+)：(.+)$/, (m, p, d, e) => `${p} ${d}: ${trText(e)}`],
+];
+// leftover UI words inside longer strings (multi-character only, so user names stay intact)
+const I18N_WORDS = Object.entries({"平均": "Avg", "最大": "Max", "最小": "Min", "手动结束": "manual stop", "截图": "screenshots", "测启动": "launch"})
+  .sort((a, b) => b[0].length - a[0].length);
+const HAS_ZH = /[㐀-鿿　-〿＀-￯]/;
+let LANG = (() => { try { const v = localStorage.getItem("perfscope.lang"); return v === "zh" ? "zh" : "en"; } catch { return "en"; } })();
+function trText(s) {
+  if (LANG === "zh" || !s || !HAS_ZH.test(s)) return s;
+  const lead = s.match(/^\s*/)[0], tail = s.match(/\s*$/)[0], core = s.trim();
+  if (I18N_EN[core] != null) return lead + I18N_EN[core] + tail;
+  if (STAT_EN[core]) return lead + STAT_EN[core] + tail;
+  for (const [rx, fn] of I18N_RX) { const m = core.match(rx); if (m) return lead + fn(...m) + tail; }
+  if (core.includes(" · ")) return lead + core.split(" · ").map(trText).join(" · ") + tail;
+  let out = core;
+  for (const [zh, en] of I18N_WORDS) out = out.split(zh).join(en);
+  return lead + out + tail;
+}
+const tr = trText;
+// ----- applying it to the page
+const I18N_ATTRS = ["placeholder", "aria-label", "data-tip", "title"];
+const SKIP = "script,style,textarea,[data-noi18n]";
+function i18nText(n) {
+  if (n.parentElement?.closest(SKIP)) return;
+  if (n.nodeValue !== n.__set) n.__zh = HAS_ZH.test(n.nodeValue) ? n.nodeValue : undefined;   // set by the page code
+  if (n.__zh === undefined) return;
+  const v = LANG === "zh" ? n.__zh : trText(n.__zh);
+  if (n.nodeValue !== v) { n.__set = v; n.nodeValue = v; } else n.__set = v;
+}
+function i18nAttrs(el) {
+  if (el.closest(SKIP)) return;
+  el.__zhA ||= {}; el.__setA ||= {};
+  for (const a of I18N_ATTRS) {
+    const cur = el.getAttribute(a); if (cur == null) continue;
+    if (cur !== el.__setA[a]) el.__zhA[a] = HAS_ZH.test(cur) ? cur : undefined;
+    if (el.__zhA[a] === undefined) continue;
+    const v = LANG === "zh" ? el.__zhA[a] : trText(el.__zhA[a]);
+    el.__setA[a] = v; if (cur !== v) el.setAttribute(a, v);
+  }
+}
+function i18nTree(root) {
+  if (root.nodeType === 3) return i18nText(root);
+  if (root.nodeType !== 1) return;
+  i18nAttrs(root);
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) n.nodeType === 3 ? i18nText(n) : i18nAttrs(n);
+}
+let i18nBusy = false;
+const i18nObserver = new MutationObserver(list => {
+  if (i18nBusy) return; i18nBusy = true;
+  try {
+    for (const m of list) {
+      if (m.type === "characterData") i18nText(m.target);
+      else if (m.type === "attributes") i18nAttrs(m.target);
+      else m.addedNodes.forEach(i18nTree);
+    }
+  } finally { i18nBusy = false; }
+});
+function applyLang() {
+  document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
+  if (!document.title.__zh) document.title.__zh = document.title;
+  document.title = LANG === "zh" ? "PerfScope 客户端" : "PerfScope";
+  i18nBusy = true; try { i18nTree(document.body); } finally { i18nBusy = false; }
+}
+i18nObserver.observe(document.body, {subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: I18N_ATTRS});
+applyLang();   // static page right away, so it never flashes the other language
+
 const $ = s => document.querySelector(s);
 const api = async (path, opt = {}) => {
   const r = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opt});
@@ -482,48 +996,207 @@ const logButton = (atts, ts, t) => LOG_KINDS.has(t) && logFor(atts, ts)
 
 
 /* ---------- charts ---------- */
+// Event lines for a chart. Markers, alerts and crashes carry their name on the line; minor events stay
+// plain lines. Names of lines that sit close together rotate top / middle / bottom so they don't overlap.
+function markLines(events, dataSets, fontSize, maxChars) {
+  let lo = Infinity, hi = -Infinity;   // time span (a loop, not spread: long runs have 100k+ points)
+  for (const d of dataSets) if (d.length) { lo = Math.min(lo, d[0][0]); hi = Math.max(hi, d[d.length - 1][0]); }
+  for (const e of events) { lo = Math.min(lo, e[0]); hi = Math.max(hi, e[0]); }
+  const span = Math.max(1, hi - lo);
+  const LANES = ["insideEndTop", "insideMiddleTop", "insideStartTop"];
+  let prevTs = -Infinity, lane = 0;
+  return events.filter(e => e[1] !== "error").slice().sort((x, y) => x[0] - y[0]).map(([ts, t, label]) => {
+    const color = isRedEvent(t) ? C.red : t.startsWith("process") ? C.amber : C.accent;
+    const named = t === "marker" || isRedEvent(t);
+    if (named) { lane = ts - prevTs < span * 0.04 ? (lane + 1) % LANES.length : 0; prevTs = ts; }
+    return {xAxis: ts, name: t === "marker" ? label : tr(label),   // marker names are the tester's own words
+      label: {show: named, position: LANES[named ? lane : 0], distance: 2, fontSize, color,
+              formatter: p => p.name.length > maxChars ? p.name.slice(0, maxChars) + "…" : p.name},
+      lineStyle: {color, type: "dashed", width: 1}};
+  });
+}
+
+/* ---------- enlarge a chart: wheel / drag / box zoom, stats of the visible range, screenshots ---------- */
+const ZOOM_ICON = `<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><path d="M1.5 5V1.5H5M8 1.5h3.5V5M11.5 8v3.5H8M5 11.5H1.5V8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const zoomBtn = () => `<button type="button" class="zbtn" data-zoom aria-label="放大查看" data-tip="放大查看：滚轮缩放、拖动滑块选范围、框选放大">${ZOOM_ICON}</button>`;
+const zoomState = {chart: null, src: null, xType: "time"};
+// opts: {title, meta, series: [{name, data, color}], events, xType: "time"|"value", viewer, src}
+function openZoom(opts) {
+  let d = $("#zoomDlg");
+  if (!d) {
+    d = Object.assign(document.createElement("dialog"), {id: "zoomDlg", className: "zoomdlg"});
+    d.setAttribute("aria-labelledby", "zoomTitle");
+    d.innerHTML = `<div class="zh"><h3 id="zoomTitle"></h3><span class="zstats" id="zoomStats" role="status"></span>
+        <button class="btn ghost" id="zoomReset">还原</button><button class="btn ghost" id="zoomClose">关闭</button></div>
+      <div class="zb"><div class="zc" id="zoomChart"></div><div class="zs" id="zoomShots"></div></div>
+      <p class="zhint">滚轮缩放 · 按住拖动平移 · 拖动下方滑块选范围 · 右上角工具可框选放大 · Esc 关闭</p>`;
+    document.body.appendChild(d);
+    d.querySelector("#zoomClose").onclick = () => d.close();
+    d.querySelector("#zoomReset").onclick = () => zoomState.chart?.dispatchAction({type: "dataZoom", start: 0, end: 100});
+    d.addEventListener("close", () => { zoomState.chart?.dispose(); zoomState.chart = null; zoomState.src = null; });
+    window.addEventListener("resize", () => zoomState.chart?.resize());
+  }
+  const {title, meta = {}, series, events = [], xType = "time", viewer} = opts;
+  zoomState.src = opts.src || null; zoomState.xType = xType;
+  d.querySelector("h3").textContent = title + (meta.unit ? `（${meta.unit}）` : "");
+  const shotsBox = d.querySelector("#zoomShots");
+  shotsBox.hidden = !(viewer && viewer.ts.length);
+  let zv = null;
+  if (!shotsBox.hidden) {   // a copy of the page's screenshot strip, driven by this chart
+    zv = new ShotViewer(shotsBox, viewer.urlOf, false); zv.add([...viewer.ts]);
+    if (viewer.cur != null) zv.show(viewer.cur);
+  }
+  d.showModal();
+  zoomState.chart?.dispose();
+  const c = echarts.init(d.querySelector("#zoomChart"), CHART_THEME); zoomState.chart = c;
+  const marks = markLines(events, series.map(sr => sr.data), 11, 24);
+  c.setOption({
+    color: PALETTE_Z, animation: false,
+    legend: series.length > 1 ? {top: 0, left: 0, textStyle: {fontSize: 12}} : undefined,
+    grid: {left: 56, right: 24, top: series.length > 1 ? 36 : 28, bottom: 64},
+    tooltip: {trigger: "axis", valueFormatter: v => v == null ? "-" : `${num(v)} ${meta.unit || ""}`},
+    toolbox: {right: 8, top: 0, feature: {dataZoom: {yAxisIndex: "none", title: {zoom: "框选放大", back: "后退一步"}}}},
+    xAxis: {type: xType, minInterval: xType === "time" ? 1000 : undefined,
+      axisLabel: {color: C.axis, fontSize: 11, hideOverlap: true, formatter: xType === "value" ? `{value} ${LANG === "zh" ? "分" : "min"}` : undefined},
+      axisLine: {lineStyle: {color: C.axisLine}}},
+    yAxis: {type: "value", scale: true, min: meta.min, max: meta.max, axisLabel: {color: C.axis, fontSize: 11}, splitLine: {lineStyle: {color: C.grid}}},
+    dataZoom: [{type: "inside", filterMode: "none"},
+               {type: "slider", filterMode: "none", height: 22, bottom: 14, borderColor: C.axisLine, fillerColor: `rgba(${C.rgb},.12)`,
+                labelFormatter: v => xType === "time" ? fmtTime(v) : `${num(v)} ${LANG === "zh" ? "分" : "min"}`}],
+    series: series.map((sr, i) => ({type: "line", name: sr.name, data: sr.data, showSymbol: sr.data.length < 80, symbolSize: 5,
+      sampling: "lttb", lineStyle: {width: 2.2, color: sr.color, shadowColor: sr.glow ? alpha(sr.color, .6) : "transparent", shadowBlur: sr.glow ? 12 : 0},
+      itemStyle: sr.color ? {color: sr.color} : undefined,
+      areaStyle: sr.glow ? {color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: alpha(sr.color, .28)}, {offset: 1, color: alpha(sr.color, 0)}])} : undefined,
+      markLine: i === 0 && marks.length ? {symbol: "none", silent: false, data: marks, tooltip: {show: true, formatter: p => esc(p.name)}} : undefined})),
+  });
+  if (zv) {
+    c.on("updateAxisPointer", e => { const v = e.axesInfo?.[0]?.value; if (v != null) zv.hover(v); });
+    c.getZr().on("globalout", () => zv.leave());
+  }
+  const stats = () => {
+    const [lo, hi] = visibleRange(c);
+    $("#zoomStats").innerHTML = series.map(sr => {
+      const st = sliceStats(sr.data.filter(([x]) => x >= lo && x <= hi));
+      return st ? `<span>${series.length > 1 ? `<b>${esc(sr.name)}</b> ` : ""}平均 ${num(st.avg)} · P90 ${num(st.p90)} · 最大 ${num(st.max)} · 最小 ${num(st.min)}<small>（${st.count} 个点）</small></span>` : "";
+    }).join("");
+  };
+  c.on("datazoom", stats); stats();
+}
+const PALETTE_Z = [];
+function visibleRange(c) {
+  const ax = c.getModel().getComponent("xAxis", 0).axis.scale.getExtent();
+  return [ax[0], ax[1]];
+}
+// live view: keep an open zoom window growing with the run
+function zoomAppend(src, metric, pts) {
+  if (zoomState.src !== src || zoomState.metric !== metric || !zoomState.chart) return;
+  const data = src.data[metric];
+  zoomState.chart.setOption({series: [{data}]});
+}
+
 class ChartSet {
-  constructor(container) { this.el = container; this.charts = {}; this.data = {}; this.events = []; this.t0 = null; }
+  // opts.brush: drag on a chart to select a time range (record page); this.onBrush([ts0, ts1]) is called
+  constructor(container, opts = {}) { this.el = container; this.charts = {}; this.data = {}; this.events = []; this.t0 = null; this.opts = opts; }
   ensure(metric) {
     if (this.charts[metric]) return;
     const m = metaOf(metric);
     const box = document.createElement("div");
     box.className = "chart";
-    box.innerHTML = `<h3>${esc(m.label)}${m.unit ? ` <span style="color:var(--muted)">(${esc(m.unit)})</span>` : ""}</h3><div class="c"></div>`;
+    box.innerHTML = `<h3><span>${esc(m.label)}${m.unit ? ` <span style="color:var(--muted)">(${esc(m.unit)})</span>` : ""}</span><span class="rstat"></span>${zoomBtn()}</h3><div class="c"></div>`;
+    box.querySelector("[data-zoom]").onclick = () => this.zoom(metric);
+    (this.boxes ||= {})[metric] = box;
     // fixed order: built-in metrics first, business metrics after
     const isBiz = metric.startsWith("biz.") || metric.startsWith("page.");   // sparse values: draw the dots
     box.dataset.rank = rank(metric);
     const after = [...this.el.children].find(c => +c.dataset.rank > rank(metric));
     after ? this.el.insertBefore(box, after) : this.el.appendChild(box);
-    const c = echarts.init(box.querySelector(".c"));
+    const lc = lineColor(metric);
+    const c = echarts.init(box.querySelector(".c"), CHART_THEME);
     c.setOption({
       grid: {left: 44, right: 12, top: 14, bottom: 24},
       tooltip: {trigger: "axis", valueFormatter: v => v == null ? "-" : `${v} ${m.unit}`},
       xAxis: {type: "time", minInterval: 1000, splitNumber: 5,
-        axisLabel: {color: "#5E6C79", fontSize: 11, hideOverlap: true}, axisLine: {lineStyle: {color: "#D9DFE4"}}},
-      yAxis: {type: "value", scale: true, min: m.min, max: m.max, axisLabel: {color: "#5E6C79", fontSize: 11}, splitLine: {lineStyle: {color: "#EEF1F3"}}},
+        axisLabel: {color: C.axis, fontSize: 11, hideOverlap: true}, axisLine: {lineStyle: {color: C.axisLine}}},
+      yAxis: {type: "value", scale: true, min: m.min, max: m.max, axisLabel: {color: C.axis, fontSize: 11}, splitLine: {lineStyle: {color: C.grid}}},
       series: [{type: "line", showSymbol: isBiz, symbolSize: 4, sampling: "lttb", data: [],
-        lineStyle: {width: 1.6, color: isBiz ? "#B7791F" : "#1E5BD8"}, itemStyle: {color: isBiz ? "#B7791F" : "#1E5BD8"},
-        markLine: {symbol: "none", silent: true, data: []}}],
+        lineStyle: {width: isBiz ? 1.6 : 2.2, color: lc, shadowColor: isBiz ? "transparent" : alpha(lc, .6), shadowBlur: isBiz ? 0 : 12, shadowOffsetY: 2},
+        itemStyle: {color: lc},
+        areaStyle: isBiz ? undefined : {color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: alpha(lc, .34)}, {offset: .7, color: alpha(lc, .06)}, {offset: 1, color: alpha(lc, 0)}])},
+        markLine: {symbol: "none", silent: false, data: []}}],
       animation: false,
     });
+    if (this.opts.brush) {   // drag horizontally to select a range; the selection becomes a shaded markArea
+      c.setOption({brush: {toolbox: [], xAxisIndex: 0, brushType: "lineX", brushMode: "single", transformable: false,
+        brushStyle: {color: `rgba(${C.rgb},.15)`, borderColor: C.accent, borderWidth: 1}}});
+      c.dispatchAction({type: "takeGlobalCursor", key: "brush", brushOption: {brushType: "lineX", brushMode: "single"}});
+      c.on("brushEnd", e => {
+        const a = e.areas?.[0]; c.dispatchAction({type: "brush", areas: []});
+        if (a?.coordRange && Math.abs(a.coordRange[1] - a.coordRange[0]) >= 1000) this.onBrush?.(a.coordRange.map(Math.round));
+      });
+    }
     // hovering any chart tells the screenshot viewer which moment to show
     c.on("updateAxisPointer", e => { const v = e.axesInfo?.[0]?.value; if (v != null) this.onHover?.(v); });
     c.getZr().on("globalout", () => this.onLeave?.());
     this.charts[metric] = c; this.data[metric] = [];
+    if (this.events.length) this.addEvents([], true);   // a chart that appears later still gets the marker lines
   }
   addPoints(points) {
     const touched = new Set();
     for (const [ts, m, v] of points) { this.ensure(m); this.data[m].push([ts, v]); touched.add(m); }
-    touched.forEach(m => this.charts[m].setOption({series: [{data: this.data[m]}]}));
+    touched.forEach(m => { this.charts[m].setOption({series: [{data: this.data[m]}]}); zoomAppend(this, m); });
   }
-  addEvents(events) {
-    if (!events.length) return;
+  rebuild() {   // after a theme switch: same data, events and selection, new colours
+    const data = this.data, range = this.range;
+    this.dispose(); this.el.innerHTML = ""; this.charts = {}; this.boxes = {}; this.data = {};
+    const pts = [];
+    for (const [m, rows] of Object.entries(data)) for (const [ts, v] of rows) pts.push([ts, m, v]);
+    pts.sort((a, b) => a[0] - b[0]);
+    this.addPoints(pts); this.addEvents([], true); if (range) this.setRange(range);
+  }
+  zoom(metric) {
+    const m = metaOf(metric), isBiz = metric.startsWith("biz.") || metric.startsWith("page.");
+    openZoom({title: m.label, meta: m, events: this.events, viewer: this.viewer, src: this,
+              series: [{name: m.label, data: this.data[metric], color: lineColor(metric), glow: !isBiz}]});
+    zoomState.metric = metric;
+  }
+  valueAt(metric, ts) {
+    const d = this.data[metric]; if (!d?.length) return null;
+    let lo = 0, hi = d.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (d[mid][0] < ts) lo = mid + 1; else hi = mid; }
+    if (lo > 0 && ts - d[lo - 1][0] < d[lo][0] - ts) lo--;
+    return Math.abs(d[lo][0] - ts) <= 5000 ? d[lo][1] : null;   // only a sample close to that moment
+  }
+  // shade [ts0, ts1] on every chart, with that chart's stats for the slice written inside the box
+  setRange(r) {
+    this.range = r;
+    const clock = ts => fmtClock((ts - (this.t0 ?? r?.[0] ?? 0)) / 1000);
+    Object.entries(this.charts).forEach(([metric, c]) => {
+      const st = r ? sliceStats((this.data[metric] || []).filter(([ts]) => ts >= r[0] && ts <= r[1])) : null;
+      const u = metaOf(metric).unit || "";
+      // the selection's stats go in the chart's title row: inside the small plot they collide with marker names
+      const hd = this.boxes?.[metric]?.querySelector(".rstat");
+      if (hd) hd.innerHTML = !r ? "" : `<b>${clock(r[0])}–${clock(r[1])}</b>` +
+        (st ? ` 平均 <b>${num(st.avg)}</b>${esc(u)} · P90 ${num(st.p90)} · 最大 ${num(st.max)} · 最小 ${num(st.min)}` : " 无数据");
+      c.setOption({series: [{markArea: {silent: true, itemStyle: {color: `rgba(${C.rgb},.10)`, borderColor: C.accent, borderWidth: 1},
+        data: r ? [[{xAxis: r[0]}, {xAxis: r[1]}]] : []}}]});
+    });
+  }
+  relabel(ts, old, label) {
+    const e = this.events.find(x => x[0] === ts && x[2] === old); if (e) { e[2] = label; this.addEvents([], true); }
+  }
+  addEvents(events, force) {
+    if (!events.length && !force) return;
     this.events.push(...events);
-    const lines = this.events.filter(e => e[1] !== "error").map(([ts, t, label]) => ({
-      xAxis: ts, label: {show: false}, name: label,
-      lineStyle: {color: isRedEvent(t) ? "#C2352B" : t.startsWith("process") ? "#B7791F" : "#1E5BD8", type: "dashed", width: 1}}));
-    Object.values(this.charts).forEach(c => c.setOption({series: [{markLine: {data: lines}}]}));
+    // markers, alerts and crashes carry their name on the line itself; minor events stay plain lines.
+    // Names of lines that sit close together alternate between the top and the bottom so they don't overlap.
+    const lines = markLines(this.events, Object.values(this.data), 10, 10);
+    // hovering a line: its full name, clock time, time since start and this metric's value at that moment
+    Object.entries(this.charts).forEach(([metric, c]) => c.setOption({series: [{markLine: {data: lines, silent: false,
+      tooltip: {show: true, formatter: p => {
+        const ts = p.data.xAxis, v = this.valueAt(metric, ts), m = metaOf(metric);
+        return `<b>${esc(p.name)}</b><br>${fmtTime(ts)}${this.t0 != null ? `（第 ${fmtClock((ts - this.t0) / 1000)}）` : ""}` +
+               (v != null ? `<br>${esc(m.label)}：${num(v)} ${esc(m.unit || "")}` : "");
+      }}}}]}));
   }
   resize() { Object.values(this.charts).forEach(c => c.resize()); }
   dispose() { Object.values(this.charts).forEach(c => c.dispose()); }
@@ -612,7 +1285,7 @@ class ShotViewer {
     this.label();
   }
 }
-function linkShots(charts, viewer) { charts.onHover = t => viewer.hover(t); charts.onLeave = () => viewer.leave(); }
+function linkShots(charts, viewer) { charts.viewer = viewer; charts.onHover = t => viewer.hover(t); charts.onLeave = () => viewer.leave(); }
 
 /* ---------- setup panel ---------- */
 async function loadDevices() {
@@ -826,10 +1499,165 @@ async function start() {
   finally { if (live.run?.status !== "running") $("#startBtn").disabled = false; }
 }
 
+// every metric has its own colour, the same one everywhere (small chart, zoom window)
+const LINE_SLOT = {cpu: 0, mem_pss: 1, mem_footprint: 1, threads: 2, fps: 3, jank_count: 4, big_jank: 6, stutter: 8,
+                   net_rx: 5, net_tx: 9, battery_level: 7, battery_temp: 8, current: 4, launch_ms: 3};
+function lineColor(metric) {
+  if (metric.startsWith("biz.") || metric.startsWith("page.")) return C.amber;
+  let slot = LINE_SLOT[metric];
+  if (slot == null) { slot = 0; for (const ch of metric) slot = (slot * 31 + ch.charCodeAt(0)) % C.lines.length; }
+  return C.lines[slot % C.lines.length];
+}
+const alpha = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
+
+/* ---------- theme switch: dark instrument / light ---------- */
+const THEME_ICON = {dark: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.8A5.8 5.8 0 0 1 6.2 2.5a5.8 5.8 0 1 0 7.3 7.3Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`, light: `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.2v1.6M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M3.2 12.8l1.1-1.1M11.7 4.3l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`};
+function renderThemeBtn() {
+  const t = document.documentElement.dataset.theme, other = t === "dark" ? "浅色" : "深色";
+  $("#themeBtn").innerHTML = `${THEME_ICON[t === "dark" ? "light" : "dark"]}${other}`;
+  $("#themeBtn").setAttribute("aria-label", `切换到${other}主题`);
+  $("#themeBtn").dataset.tip = `切换到${other}主题（当前：${t === "dark" ? "深色" : "浅色"}）`;
+}
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("perfscope.theme", t); } catch {}
+  CHART_THEME = readThemeColors(); refreshPalettes(); renderThemeBtn();
+  redrawAll();
+}
+function redrawAll() {
+  $("#zoomDlg")?.open && $("#zoomDlg").close();
+  live.charts?.rebuild();
+  const h = history.state?.hist;   // an open record / comparison page is drawn again
+  if (histPage.open && h) h.view === "record" ? openRecord(h.id, false) : openCompare(h.ids, false);
+}
+function renderLangBtn() {
+  $("#langBtn").textContent = LANG === "zh" ? "EN" : "中文";
+  $("#langBtn").setAttribute("aria-label", LANG === "zh" ? "Switch to English" : "切换到中文");
+  $("#langBtn").dataset.tip = LANG === "zh" ? "Switch to English" : "切换到中文";
+}
+function setLang(l) {
+  LANG = l;
+  try { localStorage.setItem("perfscope.lang", l); } catch {}
+  renderLangBtn(); applyLang(); renderQuickMarks(); renderThemeBtn(); redrawAll();
+}
+$("#langBtn").onclick = () => setLang(LANG === "zh" ? "en" : "zh");
+renderLangBtn();
+$("#themeBtn").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+renderThemeBtn();
+
+/* ---------- markers: quick marks, shortcuts, rename afterwards ---------- */
+const DEFAULT_QUICK_MARKS_ZH = ["开始录音", "停止录音", "切到后台", "回到前台", "发起提问"];
+const DEFAULT_QUICK_MARKS_EN = ["Start recording", "Stop recording", "To background", "To foreground", "Ask agent"];
+const defaultQuickMarks = () => LANG === "zh" ? DEFAULT_QUICK_MARKS_ZH : DEFAULT_QUICK_MARKS_EN;
+function quickMarks() {
+  try { const v = JSON.parse(localStorage.getItem("perfscope.quickMarks")); if (Array.isArray(v)) return v; } catch {}
+  return defaultQuickMarks();
+}
+function renderQuickMarks() {
+  const box = $("#qmarks"); if (!box) return;
+  const running = live.run?.status === "running";
+  box.innerHTML = `<span class="qml">快捷标记</span>${quickMarks().map((m, i) =>
+    `<button type="button" class="chip" data-noi18n data-qm="${i}" ${running ? "" : "disabled"} data-tip="${esc(tr(`点击或按 ${i + 1} 打标记「${m}」`))}">${i < 9 ? `<kbd>${i + 1}</kbd>` : ""}${esc(m)}</button>`).join("")}
+    <button type="button" class="lnk" id="qmEdit">编辑</button>
+    <span class="qmhint">快捷键：1–9 快捷标记 · M 立即打标记</span><span class="qmflash" id="qmFlash" role="status"></span>`;
+}
+function flashMark(text) {
+  const f = $("#qmFlash"); if (!f) return;
+  f.textContent = text; f.classList.add("on");
+  clearTimeout(flashMark.t); flashMark.t = setTimeout(() => f.classList.remove("on"), 2200);
+}
+function editQuickMarks() {
+  let d = $("#qmDlg");
+  if (!d) {
+    d = Object.assign(document.createElement("dialog"), {id: "qmDlg"});
+    d.innerHTML = `<h2>编辑快捷标记</h2>
+      <p class="hint">每行一个，最多 9 个，按顺序对应快捷键 1–9。</p>
+      <textarea id="qmText" rows="9" aria-label="快捷标记，每行一个"></textarea>
+      <div class="row" style="justify-content:flex-end;margin-top:12px">
+        <button class="btn ghost" id="qmReset" style="flex:none;margin-right:auto">恢复默认</button>
+        <button class="btn" id="qmCancel" style="flex:none">取消</button>
+        <button class="btn primary" id="qmSave" style="flex:none">保存</button></div>`;
+    document.body.appendChild(d);
+    d.querySelector("#qmCancel").onclick = () => d.close();
+    d.querySelector("#qmReset").onclick = () => { d.querySelector("#qmText").value = defaultQuickMarks().join("\n"); };
+    d.querySelector("#qmSave").onclick = () => {
+      const list = [...new Set(d.querySelector("#qmText").value.split("\n").map(x => x.trim()).filter(Boolean))].slice(0, 9);
+      try { localStorage.setItem("perfscope.quickMarks", JSON.stringify(list)); } catch {}
+      d.close(); renderQuickMarks();
+    };
+  }
+  d.querySelector("#qmText").value = quickMarks().join("\n");
+  d.showModal();
+}
+// keyboard: only while a run is live and the tester is not typing somewhere
+document.addEventListener("keydown", e => {
+  if (live.run?.status !== "running" || $("#tab-live").hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.closest?.("input, textarea, select, [contenteditable]") || document.querySelector("dialog[open]")) return;
+  const marks = quickMarks();
+  if (/^[1-9]$/.test(e.key) && marks[+e.key - 1]) { e.preventDefault(); live.marker(marks[+e.key - 1], Date.now()); }
+  else if (e.key === "m" || e.key === "M") { e.preventDefault(); live.marker(); }
+});
+// test names are editable in the list and on the record page
+const nameBtn = (sid, name) => `<button type="button" class="evname nm" data-noi18n data-rensess="${esc(sid)}" data-old="${esc(name)}" data-tip="点击修改名称">${esc(name)}<span aria-hidden="true">✎</span></button>`;
+function inlineEdit(btn, save, restore) {
+  const old = btn.dataset.old;
+  const inp = Object.assign(document.createElement("input"), {type: "text", value: old, className: "evedit"});
+  inp.setAttribute("aria-label", "名称");
+  btn.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = async ok => {
+    if (done) return; done = true;
+    const v = inp.value.trim();
+    let shown = old;
+    if (ok && v && v !== old) { try { shown = await save(v); } catch (err) { alert(tr(err.message)); } }
+    const tmp = document.createElement("span"); tmp.innerHTML = restore(shown); inp.replaceWith(tmp.firstChild);
+  };
+  inp.onkeydown = e => { if (e.key === "Enter") finish(true); else if (e.key === "Escape") finish(false); };
+  inp.onblur = () => finish(true);   // clicking elsewhere saves, like the other inputs
+}
+function renameSession(btn) {
+  const sid = btn.dataset.rensess;
+  inlineEdit(btn, async v => {
+    const r = await api(`/api/sessions/${sid}/rename`, {method: "POST", body: JSON.stringify({name: v})});
+    if (r.warning) setMsg("histMsg", r.warning, "err");
+    else if (r.synced) setMsg("histMsg", "已改名，服务器上的记录也同步改了", "ok");
+    return r.name;
+  }, name => nameBtn(sid, name));
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest?.("[data-rensess]");
+  if (b && (b.closest("#historyBody") || b.closest("#histView"))) { e.preventDefault(); renameSession(b); }
+});
+
+// marker names are editable after the fact
+const evLabel = (ts, t, label) => t === "marker"
+  ? `<button type="button" class="evname" data-noi18n data-ren="${ts}" data-old="${esc(label)}" data-tip="点击改名">${esc(label)}<span aria-hidden="true">✎</span></button>`
+  : esc(label);
+function renameMarker(btn, sid, charts) {
+  const old = btn.dataset.old, ts = +btn.dataset.ren;
+  const inp = Object.assign(document.createElement("input"), {type: "text", value: old, className: "evedit"});
+  inp.setAttribute("aria-label", "标记名称");
+  btn.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = async save => {
+    if (done) return; done = true;
+    const label = inp.value.trim();
+    let shown = old;
+    if (save && label && label !== old) {
+      try { await api(`/api/sessions/${sid}/markers/rename`, {method: "POST", body: JSON.stringify({ts, old, label})});
+            shown = label; charts?.relabel(ts, old, label); }
+      catch (err) { alert(tr(err.message)); }
+    }
+    const tmp = document.createElement("span"); tmp.innerHTML = evLabel(ts, "marker", shown); inp.replaceWith(tmp.firstChild);
+  };
+  inp.onkeydown = e => { if (e.key === "Enter") finish(true); else if (e.key === "Escape") finish(false); };
+  inp.onblur = () => finish(true);   // clicking elsewhere saves, like the other inputs
+}
+
 /* ---------- live view ---------- */
 const live = {
-  since: 0, sinceShot: 0, shots: null, charts: null, latest: {}, alerting: new Set(), run: null, timer: null, uploadedFor: null,
-  reset() { this.run = null; this.since = 0; this.sinceShot = 0; this.shots = null; this.latest = {}; this.alerting = new Set(); this.charts?.dispose(); this.charts = null; this.render(); },
+  markN: 0, typedAt: null, since: 0, sinceShot: 0, shots: null, charts: null, latest: {}, alerting: new Set(), run: null, timer: null, uploadedFor: null,
+  reset() { this.markN = 0; this.typedAt = null; this.run = null; this.since = 0; this.sinceShot = 0; this.shots = null; this.latest = {}; this.alerting = new Set(); this.charts?.dispose(); this.charts = null; this.render(); },
   render() {
     const body = $("#liveBody");
     if (!this.run) {
@@ -843,9 +1671,11 @@ const live = {
           <div><div class="name" id="runName"></div><div style="font-size:12px;color:var(--muted)" id="runInfo"></div></div>
           <span class="clock" id="runClock">00:00</span>
           <span class="grow"></span>
-          <input type="text" id="markerText" placeholder="标记内容，如：切到后台" aria-label="标记内容">
-          <button class="btn" id="markerBtn">打标记</button>
+          <input type="text" id="markerText" placeholder="输入标记名后回车" aria-label="标记名称"
+            data-tip="时间按开始输入的那一刻记录，慢慢打字也不会偏后。不想打字就直接点「打标记」或按 M，事后在事件里改名。">
+          <button class="btn" id="markerBtn" data-tip="立即打一个标记（快捷键 M）；输入框里有文字时用这段文字">打标记</button>
           <button class="btn danger" id="stopBtn">结束测试</button>
+          <div class="qmarks" id="qmarks"></div>
         </div>
         <div class="rack" id="rack"></div>
         <div id="liveShots"></div>
@@ -856,10 +1686,18 @@ const live = {
       this.shots = new ShotViewer($("#liveShots"), ts => `/api/sessions/${this.run.id}/shots/${ts}`, true);
       linkShots(this.charts, this.shots);
       $("#markerBtn").onclick = () => this.marker();
-      $("#markerText").onkeydown = e => { if (e.key === "Enter") this.marker(); };
+      $("#markerText").onkeydown = e => { if (e.key === "Enter") this.marker(); else if (e.key === "Escape") e.target.blur(); };
+      // the moment typing starts is when the thing happened, not when Enter is pressed
+      $("#markerText").oninput = e => { if (!e.target.value) this.typedAt = null; else if (!this.typedAt) this.typedAt = Date.now(); };
+      $("#qmarks").addEventListener("click", e => {
+        const b = e.target.closest("[data-qm]"); if (b) this.marker(quickMarks()[+b.dataset.qm], Date.now());
+        if (e.target.closest("#qmEdit")) editQuickMarks();
+      });
+      renderQuickMarks();
       $("#stopBtn").onclick = () => this.stop();
       $("#events").addEventListener("click", e => {
         const b = e.target.closest("[data-logts]"); if (b) showLog(logFor(this.atts, +b.dataset.logts));
+        const r = e.target.closest("[data-ren]"); if (r) renameMarker(r, this.run.id, this.charts);
       });
     }
     const r = this.run, running = r.status === "running";
@@ -868,6 +1706,7 @@ const live = {
     $("#runInfo").textContent = `${r.serial} · ${running ? "采集中" : "已结束"}${r.last_error ? " · 最近错误：" + r.last_error : ""}`;
     $("#runClock").textContent = fmtDur((Date.now() - r.started_at) / 1000) + (r.duration ? ` / ${fmtDur(r.duration)}` : "");
     ["markerBtn", "stopBtn", "markerText"].forEach(id => $("#" + id).disabled = !running);
+    document.querySelectorAll("#qmarks [data-qm]").forEach(b => b.disabled = !running);
     $("#startBtn").disabled = running;
   },
   renderRack() {
@@ -880,7 +1719,7 @@ const live = {
     if (!box) return;
     for (const [ts, t, label] of evs) {
       const [name, cls] = EVT[t] || [t, ""];
-      box.insertAdjacentHTML("afterbegin", `<div class="ev"><span class="t">${fmtTime(ts)}</span><span><span class="tag ${cls}">${esc(name)}</span></span><span>${esc(label)}${logButton(this.atts, ts, t)}</span></div>`);
+      box.insertAdjacentHTML("afterbegin", `<div class="ev"><span class="t">${fmtTime(ts)}</span><span><span class="tag ${cls}">${esc(name)}</span></span><span>${evLabel(ts, t, label)}${logButton(this.atts, ts, t)}</span></div>`);
       if (t === "alert") this.alerting.add(label.split(" ")[0]);
     }
     // placeholder only while there are no real events (toggling it every poll made it flicker)
@@ -915,14 +1754,23 @@ const live = {
       catch (e) { $("#runInfo").textContent += ` · 自动上传失败：${e.message}（可在本地记录里重试）`; }
     }
   },
-  async marker() {
-    const label = $("#markerText").value.trim() || "标记";
-    try { await api("/api/run/marker", {method: "POST", body: JSON.stringify({label})}); $("#markerText").value = ""; }
-    catch (e) { alert(e.message); }
+  // label: quick mark / typed text / "标记 N"; ts: when the tester acted
+  async marker(label, ts) {
+    const typed = $("#markerText").value.trim();
+    if (label == null) {
+      label = typed || `标记 ${++this.markN}`;
+      ts = typed ? this.typedAt || Date.now() : Date.now();
+    }
+    try {
+      const r = await api("/api/run/marker", {method: "POST", body: JSON.stringify({label, ts})});
+      if (label === typed) { $("#markerText").value = ""; this.typedAt = null; }
+      flashMark(`已标记：${label}  ${fmtTime(r.ts)}`);
+    }
+    catch (e) { alert(tr(e.message)); }
   },
   async stop() {
-    if (!confirm("结束本次测试？数据已实时保存在本地。")) return;
-    try { await api("/api/run/stop", {method: "POST"}); this.poll(); } catch (e) { alert(e.message); }
+    if (!confirm(tr("结束本次测试？数据已实时保存在本地。"))) return;
+    try { await api("/api/run/stop", {method: "POST"}); this.poll(); } catch (e) { alert(tr(e.message)); }
   },
 };
 
@@ -943,7 +1791,7 @@ async function loadHistory() {
     <table><thead><tr><th class="pick"><span class="info" tabindex="0" role="img" aria-label="说明：勾选两条或以上进行对比，先勾选的作为参照" data-tip="勾选两条或以上进行对比，先勾选的作为参照">?</span></th><th>名称</th><th>应用</th><th>开始时间</th><th>时长</th><th>状态</th><th>服务器</th><th></th></tr></thead><tbody>${
     list.map(s => `<tr>
       <td class="pick">${s.status !== "running" ? `<input type="checkbox" class="cmpPick" data-id="${esc(s.id)}" aria-label="选择「${esc(s.name)}」进行对比" ${cmpSel.includes(s.id) ? "checked" : ""}>` : ""}</td>
-      <td>${esc(s.name)}<div class="sub2">
+      <td>${nameBtn(s.id, s.name)}<div class="sub2">
         <button class="sid" data-act="copy" data-id="${esc(s.id)}" data-tip="${esc(s.id)}\n点击复制完整 ID" aria-label="复制记录 ID ${esc(s.id)}">#${esc(s.id.slice(0, 8))}${COPY_ICON}</button>
         ${s.project && s.project !== "default" ? `<span>${esc(s.project)}</span>` : ""}${(s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div></td>
       <td>${esc(s.app_package)}<div class="sub2">${esc([s.app_version, s.config?.env].filter(Boolean).join(" · "))}</div></td>
@@ -989,8 +1837,9 @@ $("#historyBody").addEventListener("change", e => {
 
 /* ---------- record / compare pages: replace the list instead of piling up under it ---------- */
 const histPage = {open: false, scroll: 0};
-const pageHead = (title, extra = "") => `<div class="pagebar"><button class="btn ghost" data-back>← 返回本地记录</button></div>
-  <div class="dhead"><h2>${esc(title)}</h2>${extra}</div>`;
+// renameId: the title is the record's name and can be edited in place
+const pageHead = (title, extra = "", renameId = null) => `<div class="pagebar"><button class="btn ghost" data-back>← 返回本地记录</button></div>
+  <div class="dhead"><h2>${renameId ? nameBtn(renameId, title) : esc(title)}</h2>${extra}</div>`;
 function showPage() {
   if (!histPage.open) histPage.scroll = $("main").scrollTop;   // come back to the same spot in the list
   histPage.open = true;
@@ -1044,22 +1893,127 @@ async function viewRecord(id) {
   charts.forEach(c => c.dispose()); charts = [];
   Object.assign(META, s.metric_meta);
   const diag = diagText(s);
-  $("#histView").innerHTML = pageHead(s.name, `<button class="btn" data-act="diag" data-tip="复制记录 ID、设备、系统、应用版本、环境、时间等，可直接贴到 bug 单">${COPY_ICON} 复制排查信息</button>`) + `
+  $("#histView").innerHTML = pageHead(s.name, `<button class="btn" data-act="diag" data-tip="复制记录 ID、设备、系统、应用版本、环境、时间等，可直接贴到 bug 单">${COPY_ICON} 复制排查信息</button>`, id) + `
     <dl class="facts">${diag.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>
     ${pageTable(s.points)}
+    <div id="recRange"></div>
     <div id="histShots"></div><div class="charts" id="histCharts"></div>
     <h3 class="cmph" style="font-size:14px;margin:18px 0 8px">事件</h3>
     <div class="events" id="recEvents">${s.events.length ? s.events.slice().reverse().map(([ts, t, label]) => { const [name, cls] = EVT[t] || [t, ""];
-      return `<div class="ev"><span class="t">${fmtTime(ts)}</span><span><span class="tag ${cls}">${esc(name)}</span></span><span>${esc(label)}${logButton(s.attachments, ts, t)}</span></div>`; }).join("")
+      return `<div class="ev"><span class="t">${fmtTime(ts)}</span><span><span class="tag ${cls}">${esc(name)}</span></span><span>${evLabel(ts, t, label)}${logButton(s.attachments, ts, t)}</span></div>`; }).join("")
       : `<div class="ev" style="display:block;color:var(--muted)">本次测试没有事件</div>`}</div>`;
   $("#recEvents").addEventListener("click", e => {
     const b = e.target.closest("[data-logts]"); if (b) showLog(logFor(s.attachments, +b.dataset.logts));
+    const r = e.target.closest("[data-ren]"); if (r) renameMarker(r, id, histCharts);
   });
   $("#histView").dataset.diag = diag.text;
-  histCharts?.dispose(); histCharts = new ChartSet($("#histCharts"));
+  histCharts?.dispose(); histCharts = new ChartSet($("#histCharts"), {brush: true}); histCharts.t0 = s.started_at;
   const viewer = new ShotViewer($("#histShots"), ts => `/api/sessions/${id}/shots/${ts}`, false);
   viewer.add(s.shots || []); linkShots(histCharts, viewer);
   histCharts.addPoints(s.points); histCharts.addEvents(s.events);
+  rangePanel($("#recRange"), s, histCharts);
+}
+
+/* ---------- record page: pick a time range, see every metric's stats for that slice ---------- */
+function rangePanel(box, s, chartSet) {
+  if (!s.points.length) return;
+  const t0 = s.started_at, len = Math.max(1, Math.round(((s.ended_at || s.points[s.points.length - 1][0]) - t0) / 1000));
+  const by = {};
+  for (const [ts, m, v] of s.points) (by[m] ||= []).push([ts, v]);
+  Object.values(by).forEach(rows => rows.sort((a, b) => a[0] - b[0]));
+  const metrics = Object.keys(by).filter(m => !m.startsWith("page.")).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  const full = Object.fromEntries(metrics.map(m => [m, sliceStats(by[m])]));
+  const marks = (s.events || []).filter(e => e[1] !== "error").map(([ts, t, lab]) => ({sec: Math.round((ts - t0) / 1000), text: `${(EVT[t] || [t])[0]}：${lab}`}));
+  const range = {from: 0, to: len};
+  let refM = metrics.find(m => m.startsWith("mem")) || metrics[0];
+  const markOpts = first => `<option value="">${marks.length ? first : "本次没有标记"}</option>` +
+    marks.map(m => `<option value="${m.sec}">${fmtClock(m.sec)}　${esc(m.text)}</option>`).join("");
+  box.innerHTML = `<div class="rngpanel">
+    <h3 class="cmph" style="font-size:14px;margin:18px 0 8px">区间统计 ${info("选一段时间，下表显示每个指标在这段时间里的统计值，并和全程平均对比。可以直接在下方任意曲线上按住鼠标左右拖动框选，也可以拖动这里的滑块、输入「分:秒」或按标记选；选中的那一段在每张曲线上都会标出来，并写上这段的平均、P90、最大、最小。")}</h3>
+    <div class="rng">
+      <div class="rng-h"><label class="small muted">参考曲线 <select id="rrM">${metrics.map(m => `<option value="${esc(m)}" ${m === refM ? "selected" : ""}>${esc(metaOf(m).label)}</option>`).join("")}</select></label>
+        <span class="small muted">全长 ${fmtClock(len)}</span></div>
+      <div class="rng-c" id="rrChart"></div>
+      <div class="rng-f">
+        <label>开始<input type="text" id="rrS" inputmode="numeric" aria-label="开始时间（距测试开始）"></label>
+        <label>结束<input type="text" id="rrE" inputmode="numeric" aria-label="结束时间（距测试开始）"></label>
+        <label ${marks.length ? "" : 'class="nomark"'}>从标记开始<select id="rrMs" ${marks.length ? "" : "disabled"}>${markOpts("选择开始标记…")}</select></label>
+        <label ${marks.length ? "" : 'class="nomark"'}>到标记结束<select id="rrMe" ${marks.length ? "" : "disabled"}>${markOpts("选择结束标记…")}</select></label>
+        <button class="btn ghost" id="rrFull">全程</button>
+        <span class="small muted" id="rrLen"></span>
+      </div>
+    </div>
+    <div class="wrap" id="rrTable"></div></div>`;
+  const inRange = m => by[m].filter(([ts]) => ts >= t0 + range.from * 1000 && ts <= t0 + range.to * 1000);
+  const renderTable = () => {
+    const isFull = range.from === 0 && range.to === len;
+    $("#rrTable").innerHTML = `<table class="rrtbl"><thead><tr><th>指标</th><th class="num">平均</th><th class="num">P90</th><th class="num">最大</th><th class="num">最小</th><th class="num">每小时变化</th>${isFull ? "" : `<th class="num">全程平均</th><th class="num">区间 vs 全程</th>`}</tr></thead><tbody>${
+      metrics.map(m => {
+        const st = sliceStats(inRange(m)), mm = metaOf(m), f = full[m];
+        if (!st) return `<tr><td>${esc(mm.label)} <span class="muted small">${esc(mm.unit || "")}</span></td><td class="num muted" colspan="${isFull ? 5 : 7}">这段时间没有数据</td></tr>`;
+        let diff = "";
+        if (!isFull) {
+          const pct = f && f.avg ? (st.avg - f.avg) / Math.abs(f.avg) * 100 : null;
+          const worse = mm.better === "higher" ? pct < 0 : pct > 0;
+          diff = `<td class="num muted">${num(f?.avg)}</td><td class="num ${pct == null || Math.abs(pct) < 5 ? "muted" : worse ? "bad" : "good"}">${pct == null ? "-" : `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`}</td>`;
+        }
+        const slope = st.slope_per_hour == null ? `<span class="muted" data-tip="所选范围不足 5 分钟，算不出每小时变化">-</span>` : `${st.slope_per_hour > 0 ? "+" : ""}${num(st.slope_per_hour)}`;
+        return `<tr><td>${esc(mm.label)} <span class="muted small">${esc(mm.unit || "")}</span></td><td class="num"><b>${num(st.avg)}</b></td><td class="num">${num(st.p90)}</td><td class="num">${num(st.max)}</td><td class="num">${num(st.min)}</td><td class="num">${slope}</td>${diff}</tr>`;
+      }).join("")}</tbody></table>`;
+  };
+  let mini = null;
+  const sync = () => {
+    if (!$("#rrS")) return;   // range panel not on screen (left the record page)
+    if (document.activeElement !== $("#rrS")) $("#rrS").value = fmtClock(range.from);
+    if (document.activeElement !== $("#rrE")) $("#rrE").value = fmtClock(range.to);
+    $("#rrLen").textContent = `已选 ${fmtClock(range.to - range.from)}`;
+    mini?.setOption({series: [{markArea: {data: [[{xAxis: range.from}, {xAxis: range.to}]]}}]});
+    chartSet.setRange(range.from === 0 && range.to === len ? null : [t0 + range.from * 1000, t0 + range.to * 1000]);
+  };
+  let pending = null;
+  const set = (from, to, fromSlider) => {
+    from = Math.max(0, Math.min(Math.round(from), len)); to = Math.max(0, Math.min(Math.round(to), len));
+    if (to - from < 1) return false;
+    Object.assign(range, {from, to});
+    if (!fromSlider) mini?.dispatchAction({type: "dataZoom", startValue: from, endValue: to});
+    sync(); clearTimeout(pending); pending = setTimeout(renderTable, 80);
+    return true;
+  };
+  const draw = () => {
+    if (mini) { mini.dispose(); charts = charts.filter(x => x !== mini); }
+    const meta = metaOf(refM);
+    mini = echarts.init($("#rrChart"), CHART_THEME); charts.push(mini);
+    mini.setOption({
+      animation: false, grid: {left: 46, right: 16, top: 6, bottom: 44},
+      tooltip: {trigger: "axis", formatter: p => `${fmtClock(p[0].value[0])}<br>${esc(meta.label)}：${num(p[0].value[1])} ${esc(meta.unit || "")}`},
+      xAxis: [{type: "value", min: 0, max: len, axisLabel: {color: C.axis, fontSize: 10, formatter: v => fmtClock(v), hideOverlap: true}, splitLine: {show: false}},
+              {type: "value", min: 0, max: len, show: false}],
+      yAxis: {type: "value", scale: true, splitNumber: 2, min: meta.min, max: meta.max, axisLabel: {color: C.axis, fontSize: 10}, splitLine: {lineStyle: {color: C.grid}}},
+      dataZoom: [{type: "slider", xAxisIndex: 1, filterMode: "none", startValue: range.from, endValue: range.to, height: 18, bottom: 6,
+                  brushSelect: false, labelFormatter: v => fmtClock(v), borderColor: C.axisLine, fillerColor: `rgba(${C.rgb},.15)`, handleStyle: {color: C.accent}}],
+      series: [{type: "line", showSymbol: false, data: by[refM].map(([ts, v]) => [(ts - t0) / 1000, v]), lineStyle: {width: 1.2, color: C.accent},
+        markArea: {silent: true, itemStyle: {color: `rgba(${C.rgb},.08)`}, data: [[{xAxis: range.from}, {xAxis: range.to}]]},
+        markLine: marks.length ? {symbol: "none", silent: true, label: {show: false}, lineStyle: {color: C.amber, type: "dashed", width: 1},
+                                  data: marks.map(mk => ({xAxis: mk.sec}))} : undefined}],
+    });
+    mini.on("datazoom", () => { const z = mini.getOption().dataZoom[0]; set(z.startValue, z.endValue, true); });
+  };
+  const commit = () => {
+    const a = parseClock($("#rrS").value), b = parseClock($("#rrE").value);
+    const ok = a != null && b != null && set(a, b);
+    [$("#rrS"), $("#rrE")].forEach(x => x.classList.toggle("badin", !ok));
+  };
+  [$("#rrS"), $("#rrE")].forEach(inp => {
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
+    inp.addEventListener("change", commit);
+    inp.addEventListener("blur", () => { inp.classList.remove("badin"); sync(); });
+  });
+  $("#rrMs").onchange = e => { if (e.target.value !== "") set(+e.target.value, Math.max(range.to, +e.target.value + 1)); e.target.value = ""; };
+  $("#rrMe").onchange = e => { if (e.target.value !== "") set(Math.min(range.from, +e.target.value - 1), +e.target.value); e.target.value = ""; };
+  $("#rrFull").onclick = () => set(0, len);
+  $("#rrM").onchange = e => { refM = e.target.value; draw(); };
+  chartSet.onBrush = ([a, b]) => { set((a - t0) / 1000, (b - t0) / 1000); $("#rrTable").scrollIntoView({block: "nearest", behavior: "smooth"}); };
+  draw(); sync(); renderTable();
 }
 let cmpSel = [];   // ids in the order they were ticked; the first is the reference
 function renderCmpBar() {
@@ -1117,7 +2071,7 @@ $("#historyBody").addEventListener("click", async e => {
       b.disabled = true; setMsg("histMsg", "上传中…");
       await api(`/api/sessions/${id}/upload`, {method: "POST"}); setMsg("histMsg", "上传完成", "ok"); loadHistory();
     } else if (b.dataset.act === "del") {
-      if (!confirm("删除这条本地记录？已上传到服务器的数据不受影响。")) return;
+      if (!confirm(tr("删除这条本地记录？已上传到服务器的数据不受影响。"))) return;
       await api(`/api/sessions/${id}`, {method: "DELETE"}); loadHistory();
     } else if (b.dataset.act === "view") {
       await openRecord(id);
@@ -1150,26 +2104,30 @@ function sliceStats(rows) {
 }
 
 const STAT_NAMES = {avg: "平均", p50: "P50", p90: "P90", p99: "P99", max: "最大", min: "最小", slope_per_hour: "每小时变化"};
-const PALETTE = ["#1E5BD8", "#C2352B", "#17805A", "#B7791F", "#6B4FBB", "#0E7C86"];
+const PALETTE = [];
+function refreshPalettes() { for (const p of [PALETTE, PALETTE_Z]) p.splice(0, p.length, C.accent, C.red, C.green, C.amber, C.purple, C.teal); }
+refreshPalettes();
 const num = v => v == null ? "-" : (Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 100) / 100);
 const groupPoints = points => { const by = {}; for (const [ts, m, v] of points) (by[m] ||= []).push([ts, v]); return by; };
 let charts = [];   // compare-view charts, disposed when the view is rebuilt
 function chartBox(container, meta) {
   const box = document.createElement("div"); box.className = "chart";
-  box.innerHTML = `<h3>${esc(meta.label)}${meta.unit ? ` <span style="color:var(--muted)">(${esc(meta.unit)})</span>` : ""}</h3><div class="c"></div>`;
+  box.innerHTML = `<h3><span>${esc(meta.label)}${meta.unit ? ` <span style="color:var(--muted)">(${esc(meta.unit)})</span>` : ""}</span>${zoomBtn()}</h3><div class="c"></div>`;
   container.appendChild(box); return box.querySelector(".c");
 }
 function lineChart(el, meta, series) {
-  const c = echarts.init(el); charts.push(c);
+  const c = echarts.init(el, CHART_THEME); charts.push(c);
   c.setOption({
     color: PALETTE, animation: false,
     legend: series.length > 1 ? {top: 0, right: 0, textStyle: {fontSize: 11}} : undefined,
     grid: {left: 46, right: 12, top: series.length > 1 ? 26 : 14, bottom: 26},
     tooltip: {trigger: "axis", valueFormatter: v => v == null ? "-" : `${num(v)} ${meta.unit || ""}`},
-    xAxis: {type: "value", axisLabel: {color: "#5E6C79", fontSize: 11, formatter: "{value} 分", hideOverlap: true}, axisLine: {lineStyle: {color: "#D9DFE4"}}},
-    yAxis: {type: "value", scale: true, min: meta.min, max: meta.max, axisLabel: {color: "#5E6C79", fontSize: 11}, splitLine: {lineStyle: {color: "#EEF1F3"}}},
+    xAxis: {type: "value", axisLabel: {color: C.axis, fontSize: 11, formatter: `{value} ${LANG === "zh" ? "分" : "min"}`, hideOverlap: true}, axisLine: {lineStyle: {color: C.axisLine}}},
+    yAxis: {type: "value", scale: true, min: meta.min, max: meta.max, axisLabel: {color: C.axis, fontSize: 11}, splitLine: {lineStyle: {color: C.grid}}},
     series: series.map(s => ({type: "line", name: s.name, data: s.data, showSymbol: s.data.length < 60, symbolSize: 4, sampling: "lttb", lineStyle: {width: 1.6}})),
   });
+  el.parentElement.querySelector("[data-zoom]").onclick = () =>
+    openZoom({title: `${meta.label} · 对比`, meta, xType: "value", series: series.map((s, i) => ({...s, color: PALETTE[i % PALETTE.length]}))});
   return c;
 }
 window.addEventListener("resize", () => charts.forEach(c => c.resize()));
@@ -1294,21 +2252,21 @@ async function viewCompare(ids) {
     minis.forEach(c => { c.dispose(); charts = charts.filter(x => x !== c); }); minis.length = 0;
     const m = cmpState.refMetric, meta = d.metric_meta[m];
     d.sessions.forEach((s, i) => {
-      const c = echarts.init(document.querySelector(`.rng[data-i="${i}"] .rng-c`)); charts.push(c); minis[i] = c;
+      const c = echarts.init(document.querySelector(`.rng[data-i="${i}"] .rng-c`), CHART_THEME); charts.push(c); minis[i] = c;
       c.setOption({
         animation: false, grid: {left: 46, right: 16, top: 6, bottom: 44},
         tooltip: {trigger: "axis", formatter: p => `${fmtClock(p[0].value[0])}<br>${esc(meta.label)}：${num(p[0].value[1])} ${esc(meta.unit || "")}`},
-        xAxis: [{type: "value", min: 0, max: lengthOf(s), axisLabel: {color: "#5E6C79", fontSize: 10, formatter: v => fmtClock(v), hideOverlap: true}, splitLine: {show: false}},
+        xAxis: [{type: "value", min: 0, max: lengthOf(s), axisLabel: {color: C.axis, fontSize: 10, formatter: v => fmtClock(v), hideOverlap: true}, splitLine: {show: false}},
                 {type: "value", min: 0, max: lengthOf(s), show: false}],
-        yAxis: {type: "value", scale: true, splitNumber: 2, min: meta.min, max: meta.max, axisLabel: {color: "#5E6C79", fontSize: 10}, splitLine: {lineStyle: {color: "#EEF1F3"}}},
+        yAxis: {type: "value", scale: true, splitNumber: 2, min: meta.min, max: meta.max, axisLabel: {color: C.axis, fontSize: 10}, splitLine: {lineStyle: {color: C.grid}}},
         dataZoom: [{type: "slider", xAxisIndex: 1, filterMode: "none", startValue: ranges[i].from, endValue: ranges[i].to,
           height: 18, bottom: 6, brushSelect: false, labelFormatter: v => fmtClock(v),
-          borderColor: "#D9DFE4", fillerColor: "rgba(30,91,216,.15)", handleStyle: {color: "#1E5BD8"}, moveHandleSize: 6}],
+          borderColor: C.axisLine, fillerColor: `rgba(${C.rgb},.15)`, handleStyle: {color: C.accent}, moveHandleSize: 6}],
         series: [{type: "line", showSymbol: false, data: (grouped[i][m] || []).map(([ts, v]) => [(ts - s.started_at) / 1000, v]),
-          lineStyle: {width: 1.2, color: i === 0 ? "#1E5BD8" : PALETTE[i % PALETTE.length]},
-          markArea: {silent: true, itemStyle: {color: "rgba(30,91,216,.08)"}, data: [[{xAxis: ranges[i].from}, {xAxis: ranges[i].to}]]},
+          lineStyle: {width: 1.2, color: i === 0 ? C.accent : PALETTE[i % PALETTE.length]},
+          markArea: {silent: true, itemStyle: {color: `rgba(${C.rgb},.08)`}, data: [[{xAxis: ranges[i].from}, {xAxis: ranges[i].to}]]},
           markLine: marks[i].length ? {symbol: "none", silent: true, label: {show: false},
-            lineStyle: {color: "#B7791F", type: "dashed", width: 1}, data: marks[i].map(mk => ({xAxis: mk.sec}))} : undefined}],
+            lineStyle: {color: C.amber, type: "dashed", width: 1}, data: marks[i].map(mk => ({xAxis: mk.sec}))} : undefined}],
       });
       c.on("datazoom", () => {
         const z = c.getOption().dataZoom[0];
@@ -1451,6 +2409,7 @@ async function onDeviceChange() {
   if (saved.package && apps.includes(saved.package)) setApp(saved.package);
   updateSummaries();
   live.render(); live.poll();
+  applyLang();
 })();
 </script>
 </body>

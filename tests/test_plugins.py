@@ -150,3 +150,28 @@ def test_server_stats_and_meta(tmp_path, monkeypatch):
     assert d["metric_meta"]["threads"]["label"] == "线程数"   # server never heard of "threads"
     assert d["stats"]["threads"]["max"] == 12
     assert c.get("/api/metrics").json()["metrics"] == ["threads"]
+
+
+def test_marker_time_and_rename(tmp_path):
+    import time
+    store = Store(tmp_path / "m.db")
+    r = SessionRunner(store, {"target": {"platform": "testplat", "serial": "T1", "package": "app"},
+                              "interval": 0.1, "duration": 0.6})
+    r.start()
+    time.sleep(0.3)
+    typed_at = r.started_at + 100                       # tester started typing 100 ms in, pressed Enter later
+    ts = r.add_marker("开始录音", typed_at)
+    assert ts == typed_at
+    assert r.add_marker("太早", r.started_at - 60_000) == r.started_at    # clamped into the run
+    assert r.add_marker("太晚", int(time.time() * 1000) + 60_000) <= int(time.time() * 1000)
+    r.wait(); r.stop()
+    assert store.rename_event(r.id, ts, "marker", "开始录音", "开始录音（第二段）") == 1
+    assert store.rename_event(r.id, ts, "marker", "不存在", "x") == 0
+    assert [e[2] for e in store.events(r.id) if e[0] == ts] == ["开始录音（第二段）"]
+
+
+def test_rename_session(tmp_path):
+    store, r = run_session(tmp_path, metrics=["answer"])
+    assert store.rename_session(r.id, "录音 2h 回归") == 1
+    assert store.get_session(r.id)["name"] == "录音 2h 回归"
+    assert store.rename_session("nope", "x") == 0
